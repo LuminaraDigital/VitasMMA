@@ -1,0 +1,5 @@
+{
+  "name": "VitasMMA",
+  "description": "AI MMA fight coach for Telegram Mini App",
+  "requestFramePermissions": ["camera", "microphone"]
+}
