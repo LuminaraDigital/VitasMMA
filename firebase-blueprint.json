@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Drill": {
+      "title": "Drill",
+      "description": "A specific training drill",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "desc": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "title", "desc", "completed"]
+    },
+    "StrengthLog": {
+      "title": "StrengthLog",
+      "description": "A log of a strength exercise",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "exercise": { "type": "string" },
+        "weight": { "type": "number" },
+        "reps": { "type": "number" }
+      },
+      "required": ["date", "exercise", "weight", "reps"]
+    },
+    "CampTask": {
+      "title": "CampTask",
+      "description": "A task within a fight camp",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["drill", "conditioning", "recovery"] },
+        "verificationCriteria": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "xpReward": { "type": "number" }
+      },
+      "required": ["id", "title", "description", "type", "verificationCriteria", "completed", "xpReward"]
+    },
+    "FightCamp": {
+      "title": "FightCamp",
+      "description": "A structured training camp",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "durationWeeks": { "type": "number" },
+        "currentDay": { "type": "number" },
+        "tasks": { "type": "array", "items": { "$ref": "CampTask" } },
+        "progress": { "type": "number" }
+      },
+      "required": ["id", "title", "description", "durationWeeks", "currentDay", "tasks", "progress"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "The user's fighter profile",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "nickname": { "type": "string" },
+        "height": { "type": "string" },
+        "weight": { "type": "number" },
+        "gender": { "type": "string", "enum": ["Male", "Female"] },
+        "weightClass": { "type": "string" },
+        "targetWeightClass": { "type": "string" },
+        "competitionLevel": { "type": "string", "enum": ["Hobbyist", "Amateur", "Professional"] },
+        "baseStyle": { "type": "string" },
+        "stance": { "type": "string" },
+        "striking": { "type": "number" },
+        "grappling": { "type": "number" },
+        "clinch": { "type": "number" },
+        "archetype": { "type": "string" },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "lastActiveDate": { "type": "string" },
+        "activeDrills": { "type": "array", "items": { "$ref": "Drill" } },
+        "analysisHistory": { "type": "array", "items": { "type": "string" } },
+        "activeCamp": { "$ref": "FightCamp" },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "isPro": { "type": "boolean" },
+        "coins": { "type": "number" },
+        "dailyQuests": { "type": "array", "items": { "type": "object" } },
+        "unlockedModules": { "type": "array", "items": { "type": "string" } },
+        "strengthLogs": { "type": "array", "items": { "$ref": "StrengthLog" } },
+        "uid": { "type": "string" }
+      },
+      "required": ["baseStyle", "stance", "striking", "grappling", "clinch", "archetype", "xp", "level", "streak", "activeDrills", "analysisHistory", "uid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    }
+  }
+}

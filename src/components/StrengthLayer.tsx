@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Dumbbell, CheckCircle2, Zap, Target, Activity, Youtube, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Dumbbell, CheckCircle2, Zap, Target, Activity, Youtube, ExternalLink, Trophy, TrendingUp } from 'lucide-react';
 import { UserProfile } from '../types';
 
 export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
   const [completed, setCompleted] = useState(false);
-  const [exerciseLogs, setExerciseLogs] = useState<Record<string, { weight: string, reps: string }>>({});
+  const [exerciseLogs, setExerciseLogs] = useState<Record<string, { weight: string, reps: string, rpe: string }>>({});
 
   const plan = useMemo(() => {
     const style = profile.baseStyle?.toLowerCase() || '';
@@ -14,7 +14,9 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
       return {
         type: 'Grappling',
         exercises: [
-          { name: 'Deadlift / Heavy Band Pulls', reps: '3x8', benefit: 'grappling takedown power' },
+          { name: 'Squat', reps: '3x5', benefit: 'lower body power & base' },
+          { name: 'Bench Press', reps: '3x5', benefit: 'pushing strength & framing' },
+          { name: 'Deadlift', reps: '1x5', benefit: 'posterior chain & takedown power' },
           { name: 'Pull-ups / Inverted Rows', reps: '4x6', benefit: 'guard retention & clinch pulls' },
           { name: 'Turkish Get-ups', reps: '3x5/side', benefit: 'endurance + stability' }
         ],
@@ -28,9 +30,11 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
       return {
         type: 'Striking',
         exercises: [
+          { name: 'Squat', reps: '3x5', benefit: 'lower body power & base' },
+          { name: 'Bench Press', reps: '3x5', benefit: 'pushing strength & framing' },
+          { name: 'Deadlift', reps: '1x5', benefit: 'posterior chain & takedown power' },
           { name: 'Plyo Push-ups', reps: '3x10', benefit: 'explosive punching power' },
-          { name: 'Rotational Twists / Slams', reps: '3x8/side', benefit: 'core torque for kicks' },
-          { name: 'Bulgarian Split Squats', reps: '3x8/leg', benefit: 'base stability & power generation' }
+          { name: 'Rotational Twists / Slams', reps: '3x8/side', benefit: 'core torque for kicks' }
         ],
         videos: [
           { title: 'Explosive Pushups for Knockout Power', channel: 'FightTips', duration: '6:30', why: 'Directly translates to punching speed and snap', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
@@ -42,9 +46,11 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
       return {
         type: 'Endurance',
         exercises: [
+          { name: 'Squat', reps: '3x5', benefit: 'lower body power & base' },
+          { name: 'Bench Press', reps: '3x5', benefit: 'pushing strength & framing' },
+          { name: 'Deadlift', reps: '1x5', benefit: 'posterior chain & takedown power' },
           { name: 'Kettlebell / DB Swings', reps: '4x15', benefit: 'hip explosiveness & cardio' },
-          { name: 'Farmer Carries', reps: '3x60s', benefit: 'grip strength & clinch control' },
-          { name: 'Burpees with Sprawl', reps: '3x12', benefit: 'takedown defense endurance' }
+          { name: 'Farmer Carries', reps: '3x60s', benefit: 'grip strength & clinch control' }
         ],
         videos: [
           { title: 'Kettlebell Circuits for MMA Cardio', channel: 'Phil Daru Strong', duration: '14:00', why: 'Mimics the lactic acid buildup of a 5-minute round', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
@@ -67,11 +73,12 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
     const newXp = profile.xp + rewardXp;
     const newLevel = Math.floor(newXp / 1000) + 1;
 
-    const newLogs = Object.entries(exerciseLogs).map(([exercise, data]: [string, { weight: string, reps: string }]) => ({
+    const newLogs = Object.entries(exerciseLogs).map(([exercise, data]: [string, { weight: string, reps: string, rpe: string }]) => ({
       date: new Date().toISOString(),
       exercise,
       weight: parseFloat(data.weight) || 0,
-      reps: parseInt(data.reps, 10) || 0
+      reps: parseInt(data.reps, 10) || 0,
+      rpe: parseInt(data.rpe, 10) || undefined
     })).filter(log => log.weight > 0 || log.reps > 0);
 
     setTimeout(() => {
@@ -130,9 +137,23 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
 
         <div className="space-y-3">
           {plan.exercises.map((ex, i) => {
-            const pastLogs = profile.strengthLogs?.filter(l => l.exercise === ex.name).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            const lastLog = pastLogs?.[0];
+            const pastLogs = profile.strengthLogs?.filter(l => l.exercise === ex.name).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
+            const lastLog = pastLogs[0];
+            const prLog = pastLogs.reduce((best, current) => {
+              if (current.weight > best.weight) return current;
+              if (current.weight === best.weight && current.reps > best.reps) return current;
+              return best;
+            }, { weight: 0, reps: 0 });
+
             const isLogged = !!(exerciseLogs[ex.name]?.weight || exerciseLogs[ex.name]?.reps);
+            const currentWeight = parseFloat(exerciseLogs[ex.name]?.weight) || 0;
+            const currentReps = parseInt(exerciseLogs[ex.name]?.reps, 10) || 0;
+
+            const hasPreviousLogs = pastLogs.length > 0;
+            const isNewPR = hasPreviousLogs && (currentWeight > prLog.weight || (currentWeight === prLog.weight && currentWeight > 0 && currentReps > prLog.reps));
+            const weightDiff = currentWeight - prLog.weight;
+            const repsDiff = currentReps - prLog.reps;
+            const isBig3 = ['Squat', 'Bench Press', 'Deadlift'].includes(ex.name);
 
             return (
               <motion.div 
@@ -140,24 +161,30 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className={`p-4 rounded-xl border flex flex-col gap-2 transition-colors duration-300 ${isLogged ? 'bg-[#00E5FF]/5 border-[#00E5FF]/30' : 'bg-[#1A2235]/40 border-white/5'}`}
+                className={`p-4 rounded-xl border flex flex-col gap-2 transition-colors duration-300 ${
+                  isNewPR && isBig3 ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]' :
+                  isLogged ? 'bg-[#00E5FF]/5 border-[#00E5FF]/30' : 'bg-[#1A2235]/40 border-white/5'
+                }`}
               >
-                <div className="flex justify-between items-start">
-                  <h3 className="font-bold text-lg flex items-center gap-2">
-                    {isLogged ? <CheckCircle2 className="w-5 h-5 text-[#00E5FF]" /> : <span className="text-gray-500 text-sm">{i + 1}.</span>}
-                    {ex.name}
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <h3 className="font-bold text-base md:text-lg flex items-center gap-2 min-w-0">
+                    {isLogged ? <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-[#00E5FF] shrink-0" /> : <span className="text-gray-500 text-sm shrink-0">{i + 1}.</span>}
+                    <span className="truncate">{ex.name}</span>
                   </h3>
-                  <span className={`text-xs font-mono px-2 py-1 rounded-md ${isLogged ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'bg-gray-800 text-gray-300'}`}>{ex.reps}</span>
+                  <span className={`text-[10px] md:text-xs font-mono px-2 py-1 rounded-md shrink-0 ${isLogged ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'bg-gray-800 text-gray-300'}`}>{ex.reps}</span>
                 </div>
                 <p className="text-sm text-[#00E5FF] flex items-center gap-1 mb-2">
                   <Target className="w-3 h-3" /> {ex.benefit}
                 </p>
 
-                {lastLog && (
-                  <div className="text-xs text-gray-400 italic mb-2">
-                    Last session: {lastLog.weight > 0 ? `${lastLog.weight} lbs × ` : ''}{lastLog.reps} reps
-                  </div>
-                )}
+                <div className="text-xs text-gray-400 italic mb-2 flex justify-between items-center">
+                  <span>{lastLog ? `Last: ${lastLog.weight > 0 ? `${lastLog.weight} lbs × ` : ''}${lastLog.reps} reps${lastLog.rpe ? ` @ RPE ${lastLog.rpe}` : ''}` : 'No previous logs'}</span>
+                  {prLog.weight > 0 && (
+                    <span className="flex items-center gap-1 text-yellow-500/80 font-semibold not-italic">
+                      <Trophy className="w-3 h-3" /> PR: {prLog.weight} lbs × {prLog.reps}
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex gap-3 mt-1">
                   <div className="flex-1">
@@ -180,7 +207,42 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#00E5FF]/50"
                     />
                   </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 block">RPE (1-10)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 8"
+                      min="1"
+                      max="10"
+                      value={exerciseLogs[ex.name]?.rpe || ''}
+                      onChange={e => setExerciseLogs(prev => ({ ...prev, [ex.name]: { ...prev[ex.name], rpe: e.target.value } }))}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#00E5FF]/50"
+                    />
+                  </div>
                 </div>
+
+                {isNewPR && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+                    className={`p-2 rounded-lg flex items-center gap-2 text-xs font-bold overflow-hidden ${
+                      isBig3 
+                        ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/50 text-yellow-400' 
+                        : 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-500'
+                    }`}
+                  >
+                    <Trophy className={`shrink-0 ${isBig3 ? 'w-5 h-5 text-yellow-400 animate-pulse' : 'w-4 h-4'}`} />
+                    <span className={isBig3 ? 'text-sm uppercase tracking-wider' : ''}>
+                      {isBig3 ? 'Core Lift PR Shattered!' : 'New Personal Record!'}
+                    </span>
+                    <span className={`ml-auto px-2 py-0.5 rounded text-[10px] whitespace-nowrap ${
+                      isBig3 ? 'bg-yellow-400/30 text-yellow-300' : 'bg-yellow-500/20'
+                    }`}>
+                      <TrendingUp className="w-3 h-3 inline mr-1" />
+                      {weightDiff > 0 ? `+${weightDiff} lbs` : `+${repsDiff} reps`}
+                    </span>
+                  </motion.div>
+                )}
               </motion.div>
             );
           })}
@@ -202,11 +264,6 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 + (i * 0.1) }}
                 className="block p-4 bg-[#111623] border border-red-500/20 rounded-xl hover:border-red-500/50 transition-colors group"
-                onClick={(e) => {
-                  if (!window.confirm(`Open "${vid.title}" in YouTube?`)) {
-                    e.preventDefault();
-                  }
-                }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="font-bold text-white group-hover:text-red-400 transition-colors pr-4">{vid.title}</h4>

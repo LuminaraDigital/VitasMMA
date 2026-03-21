@@ -1,17 +1,18 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu } from 'lucide-react';
+import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu, Youtube, ExternalLink, Zap, XCircle } from 'lucide-react';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import { getAIContext } from '../utils/aiContext';
 import { UserProfile } from '../types';
 
 function LoadingState() {
   const [step, setStep] = useState(0);
   
   const steps = [
-    { icon: <Activity className="w-8 h-8 text-[#00E5FF]" />, text: "Detecting biomechanics and posture..." },
-    { icon: <Shield className="w-8 h-8 text-purple-500" />, text: "Evaluating distance & guard..." },
-    { icon: <Search className="w-8 h-8 text-[#FF2A2A]" />, text: "Comparing to professional fighters..." },
-    { icon: <Cpu className="w-8 h-8 text-[#00E5FF]" />, text: "Generating actionable fixes..." },
+    { icon: <Activity className="w-12 h-12 text-brand-teal" />, text: "Detecting biomechanics and posture..." },
+    { icon: <Shield className="w-12 h-12 text-brand-violet" />, text: "Evaluating distance & guard..." },
+    { icon: <Search className="w-12 h-12 text-brand-blue" />, text: "Comparing to professional fighters..." },
+    { icon: <Cpu className="w-12 h-12 text-brand-teal" />, text: "Generating actionable fixes..." },
   ];
 
   useEffect(() => {
@@ -22,28 +23,46 @@ function LoadingState() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center py-12">
-      <div className="relative mb-8">
+    <div className="flex-1 flex flex-col items-center justify-center py-24 relative overflow-hidden">
+      <div className="absolute inset-0 bg-brand-teal/5 blur-[150px] animate-pulse pointer-events-none"></div>
+      <div className="relative mb-16 perspective-1000">
         <motion.div 
           animate={{ rotate: 360 }} 
-          transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-          className="absolute inset-0 border-2 border-dashed border-[#FF2A2A]/30 rounded-full w-20 h-20 -ml-2 -mt-2"
+          transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
+          className="absolute -inset-12 border-2 border-dashed border-brand-teal/20 rounded-full"
+        />
+        <motion.div 
+          animate={{ rotate: -360 }} 
+          transition={{ repeat: Infinity, duration: 12, ease: "linear" }}
+          className="absolute -inset-16 border border-brand-violet/20 rounded-full"
         />
         <motion.div 
           key={step}
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-16 h-16 bg-[#1A2235] rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(0,229,255,0.2)] relative z-10"
+          initial={{ scale: 0.8, opacity: 0, rotateY: 90, z: -100 }}
+          animate={{ scale: 1, opacity: 1, rotateY: 0, z: 0 }}
+          exit={{ scale: 1.2, opacity: 0, rotateY: -90, z: 100 }}
+          transition={{ type: "spring", stiffness: 100, damping: 15 }}
+          className="w-32 h-32 glass-dark rounded-[2.5rem] flex items-center justify-center shadow-[0_30px_60px_rgba(0,0,0,0.5)] relative z-10 border border-white/15 backdrop-blur-3xl transform-gpu"
+          style={{ transformStyle: 'preserve-3d' }}
         >
-          {steps[step].icon}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-[2.5rem]" />
+          <div className="drop-shadow-[0_0_20px_rgba(0,245,160,0.4)]">
+            {steps[step].icon}
+          </div>
         </motion.div>
       </div>
-      <h3 className="text-lg font-bold uppercase tracking-widest text-[#FF2A2A] animate-pulse mb-2">Coach is analyzing</h3>
+      <motion.h3 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-3xl font-black italic uppercase tracking-tighter text-brand-teal animate-pulse mb-4 drop-shadow-[0_0_15px_rgba(0,245,160,0.6)]"
+      >
+        Coach is analyzing
+      </motion.h3>
       <motion.p 
         key={step + 'text'}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-sm text-gray-400 text-center h-8"
+        className="text-lg text-white/50 text-center h-10 font-black italic uppercase tracking-tight opacity-80"
       >
         {steps[step].text}
       </motion.p>
@@ -63,6 +82,7 @@ export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { pr
   const [sessionScore, setSessionScore] = useState<number | null>(null);
   const [xpEarned, setXpEarned] = useState<number | null>(null);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Live Recording State
@@ -145,7 +165,7 @@ export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { pr
       recorder.start();
     } catch (err) {
       console.error("Error accessing camera:", err);
-      alert("Could not access camera. Please check permissions.");
+      setError("Could not access camera. Please check permissions.");
     }
   };
 
@@ -175,19 +195,13 @@ export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { pr
       reader.onloadend = async () => {
         const base64data = (reader.result as string).split(',')[1];
         
-        const historyContext = profile.analysisHistory && profile.analysisHistory.length > 0
-          ? `\n\nPREVIOUS ANALYSES OF THIS FIGHTER (Use this to track progression and recurring habits):\n${profile.analysisHistory.slice(-3).map((a, i) => `--- Analysis ${i+1} ---\n${a}`).join('\n\n')}`
-          : "";
-
         const claimContext = userClaim.trim() ? `\n\nUSER CLAIM / FOCUS:\nThe user states they were working on: "${userClaim}" and is requesting ${requestedXp} XP. Verify this claim in your analysis. If the video proves they did this with good effort, explicitly state "VERIFIED: YES" and award a score based on effort/quality. If the video does not match the claim or effort is poor, state "VERIFIED: NO" and give a low score.` : "";
 
         const promptText = `You are Vitas, an elite AI MMA fight coach and world-class expert in biomechanics, striking, and grappling. 
 Analyze this MMA video with extreme precision and depth.
 
-FIGHTER PROFILE:
-Base Style: ${profile.baseStyle}
-Stance: ${profile.stance}
-Level: ${profile.level}${historyContext}${claimContext}
+${getAIContext(profile)}
+${claimContext}
 
 PROVIDE A HIGHLY STRUCTURED ANALYSIS USING THIS EXACT FORMAT (use markdown):
 # 🥋 Discipline & Context
@@ -313,27 +327,99 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
   };
 
   return (
-    <div className="h-full p-6 flex flex-col bg-[#0B0F19] text-white overflow-y-auto hide-scrollbar">
-      <header className="flex items-center gap-4 mb-8 shrink-0">
-        <button onClick={() => {
-          if (isRecording) stopRecording();
-          onBack();
-        }} className="p-2 bg-[#1A2235] rounded-full hover:bg-[#2A3245] transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold uppercase tracking-wider">Video Analysis</h1>
+    <div className="h-full flex flex-col bg-brand-bg text-white overflow-hidden relative font-sans">
+      {/* Immersive Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[70%] h-[70%] bg-brand-violet/20 rounded-full blur-[120px] animate-pulse opacity-40" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] bg-brand-teal/20 rounded-full blur-[120px] animate-pulse opacity-40" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-[30%] right-[10%] w-[40%] h-[40%] bg-brand-blue/10 rounded-full blur-[100px] opacity-30" />
+        
+        {/* Animated Grid Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,#000_70%,transparent_100%)]" />
+        
+        {/* Floating Particles Simulation */}
+        <div className="absolute inset-0 opacity-20">
+          {[...Array(8)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 bg-white rounded-full"
+              animate={{
+                y: [0, -150, 0],
+                x: [0, Math.random() * 60 - 30, 0],
+                opacity: [0, 1, 0],
+                scale: [0, 2, 0]
+              }}
+              transition={{
+                duration: 6 + Math.random() * 6,
+                repeat: Infinity,
+                delay: Math.random() * 5,
+                ease: "easeInOut"
+              }}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <header className="sticky top-0 z-50 glass-dark px-4 md:px-8 py-4 md:py-6 flex items-center gap-4 md:gap-6 border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[2rem] md:rounded-b-[3.5rem]">
+        <motion.button 
+          whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            if (isRecording) stopRecording();
+            onBack();
+          }} 
+          className="p-2 md:p-3.5 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
+        >
+          <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-white/90" />
+        </motion.button>
+        <div>
+          <motion.h1 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+          >
+            Video Analysis
+          </motion.h1>
+          <div className="flex items-center gap-2 mt-1 md:mt-2">
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
+            <p className="text-[8px] md:text-[10px] text-brand-teal font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70">AI BIOMECHANICS ENGINE</p>
+          </div>
+        </div>
       </header>
 
-      <main className="flex-1 flex flex-col">
+      {error && (
+        <div className="mx-4 mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium relative z-50 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="p-1 hover:bg-red-500/20 rounded-lg transition-colors">
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      <main className="flex-1 flex flex-col p-8 overflow-y-auto hide-scrollbar relative z-10 pb-24">
         {!previewUrl && !isRecording ? (
-          <div className="flex-1 flex flex-col gap-4 min-h-0 pb-4">
-            <div 
-              className="flex-1 min-h-[180px] border-2 border-dashed border-[#FF2A2A]/30 rounded-2xl flex flex-col items-center justify-center bg-[#FF2A2A]/5 cursor-pointer hover:bg-[#FF2A2A]/10 transition-colors p-4"
+          <div className="flex-1 flex flex-col gap-6 md:gap-10 min-h-0 max-w-4xl mx-auto w-full">
+            <motion.div 
+              initial={{ opacity: 0, y: 40, rotateX: 10 }}
+              animate={{ opacity: 1, y: 0, rotateX: 0 }}
+              whileHover={{ y: -15, scale: 1.03, rotateX: 5, rotateY: -5, z: 50 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 min-h-[240px] md:min-h-[280px] glass-dark border border-brand-violet/40 rounded-[2rem] md:rounded-[3.5rem] flex flex-col items-center justify-center bg-brand-violet/5 cursor-pointer hover:bg-brand-violet/10 transition-all p-8 md:p-12 group relative overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.5)] md:shadow-[0_40px_80px_rgba(0,0,0,0.5)] perspective-2000 transform-gpu"
+              style={{ transformStyle: 'preserve-3d' }}
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload className="w-10 h-10 text-[#FF2A2A] mb-3" />
-              <h2 className="text-lg font-bold mb-1">Upload Training Clip</h2>
-              <p className="text-xs text-gray-400 text-center max-w-xs">Select a video from your gallery (max 60s).</p>
+              <div className="absolute inset-0 bg-gradient-to-br from-brand-violet/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+              <div className="absolute -inset-[100%] bg-[radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.1)_0%,transparent_50%)] group-hover:animate-[spin_15s_linear_infinite] pointer-events-none" />
+              
+              <div className="relative z-10 w-20 h-20 md:w-28 md:h-28 rounded-2xl md:rounded-[2.5rem] bg-black/60 flex items-center justify-center mb-6 md:mb-10 border border-brand-violet/40 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700 shadow-[0_0_40px_rgba(168,85,247,0.4)] md:shadow-[0_0_60px_rgba(168,85,247,0.4)] transform-gpu" style={{ transform: 'translateZ(50px)' }}>
+                <Upload className="w-10 h-10 md:w-14 md:h-14 text-brand-violet drop-shadow-[0_0_15px_rgba(168,85,247,0.8)]" />
+              </div>
+              <h2 className="relative z-10 text-2xl md:text-4xl font-black italic uppercase tracking-tighter mb-2 md:mb-4 group-hover:text-brand-violet transition-colors drop-shadow-lg" style={{ transform: 'translateZ(30px)' }}>Upload Clip</h2>
+              <p className="relative z-10 text-[9px] md:text-[11px] text-white/40 text-center max-w-xs font-black uppercase tracking-[0.2em] md:tracking-[0.4em] italic" style={{ transform: 'translateZ(20px)' }}>Select from gallery (max 60s)</p>
               <input 
                 type="file" 
                 accept="video/*" 
@@ -341,20 +427,31 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
                 ref={fileInputRef}
                 onChange={handleFileChange}
               />
-            </div>
+            </motion.div>
             
-            <div 
-              className="flex-1 min-h-[180px] border-2 border-dashed border-[#00E5FF]/30 rounded-2xl flex flex-col items-center justify-center bg-[#00E5FF]/5 cursor-pointer hover:bg-[#00E5FF]/10 transition-colors p-4"
+            <motion.div 
+              initial={{ opacity: 0, y: 40, rotateX: 10 }}
+              animate={{ opacity: 1, y: 0, rotateX: 0 }}
+              transition={{ delay: 0.1 }}
+              whileHover={{ y: -15, scale: 1.03, rotateX: 5, rotateY: 5, z: 50 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 min-h-[240px] md:min-h-[280px] glass-dark border border-brand-teal/40 rounded-[2rem] md:rounded-[3.5rem] flex flex-col items-center justify-center bg-brand-teal/5 cursor-pointer hover:bg-brand-teal/10 transition-all p-8 md:p-12 group relative overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.5)] md:shadow-[0_40px_80px_rgba(0,0,0,0.5)] perspective-2000 transform-gpu"
+              style={{ transformStyle: 'preserve-3d' }}
               onClick={startRecording}
             >
-              <Camera className="w-10 h-10 text-[#00E5FF] mb-3" />
-              <h2 className="text-lg font-bold mb-1">Record Live Session</h2>
-              <p className="text-xs text-gray-400 text-center max-w-xs">Capture sparring or drills in real-time.</p>
-            </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+              <div className="absolute -inset-[100%] bg-[radial-gradient(circle_at_50%_50%,rgba(0,245,160,0.1)_0%,transparent_50%)] group-hover:animate-[spin_15s_linear_infinite] pointer-events-none" />
+
+              <div className="relative z-10 w-20 h-20 md:w-28 md:h-28 rounded-2xl md:rounded-[2.5rem] bg-black/60 flex items-center justify-center mb-6 md:mb-10 border border-brand-teal/40 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-700 shadow-[0_0_40px_rgba(0,245,160,0.4)] md:shadow-[0_0_60px_rgba(0,245,160,0.4)] transform-gpu" style={{ transform: 'translateZ(50px)' }}>
+                <Camera className="w-10 h-10 md:w-14 md:h-14 text-brand-teal drop-shadow-[0_0_15px_rgba(0,245,160,0.8)]" />
+              </div>
+              <h2 className="relative z-10 text-2xl md:text-4xl font-black italic uppercase tracking-tighter mb-2 md:mb-4 text-brand-teal drop-shadow-lg" style={{ transform: 'translateZ(30px)' }}>Record Live</h2>
+              <p className="relative z-10 text-[9px] md:text-[11px] text-white/40 text-center max-w-xs font-black uppercase tracking-[0.2em] md:tracking-[0.4em] italic" style={{ transform: 'translateZ(20px)' }}>Capture in real-time</p>
+            </motion.div>
           </div>
         ) : isRecording ? (
-          <div className="flex flex-col h-full">
-            <div className="relative rounded-2xl overflow-hidden bg-black flex-1 mb-6 border border-[#FF2A2A]/50 shadow-[0_0_15px_rgba(255,42,42,0.2)]">
+          <div className="flex flex-col h-full max-w-5xl mx-auto w-full">
+            <div className="relative rounded-[2rem] md:rounded-[3.5rem] overflow-hidden bg-black flex-1 mb-6 md:mb-10 border border-brand-violet/50 shadow-[0_20px_50px_rgba(0,0,0,0.7)] md:shadow-[0_40px_100px_rgba(0,0,0,0.7)] perspective-2000">
               <video 
                 ref={liveVideoRef} 
                 autoPlay 
@@ -362,15 +459,15 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
                 playsInline 
                 className="w-full h-full object-cover" 
               />
-              <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm">
-                <div className="w-3 h-3 rounded-full bg-[#FF2A2A] animate-pulse" />
-                <span className="text-sm font-bold text-[#FF2A2A] uppercase tracking-wider">Recording</span>
+              <div className="absolute top-6 right-6 md:top-10 md:right-10 flex items-center gap-3 md:gap-5 glass-dark px-4 py-2 md:px-8 md:py-4 rounded-xl md:rounded-2xl border border-brand-violet/50 shadow-2xl backdrop-blur-3xl">
+                <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-brand-violet animate-pulse shadow-[0_0_20px_rgba(168,85,247,1)]" />
+                <span className="text-xs md:text-sm font-black italic uppercase tracking-[0.2em] md:tracking-[0.3em] text-brand-violet">Live Feed</span>
               </div>
               
               {zoomCapabilities && (
-                <div className="absolute bottom-4 left-4 right-4 bg-black/60 p-4 rounded-2xl backdrop-blur-md flex items-center gap-4 border border-white/10">
-                  <ZoomIn className="w-5 h-5 text-gray-400" />
-                  <span className="text-xs font-bold font-mono text-gray-400">{zoomCapabilities.min}x</span>
+                <div className="absolute bottom-6 left-6 right-6 md:bottom-10 md:left-10 md:right-10 glass-dark p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] border border-white/15 flex items-center gap-4 md:gap-10 shadow-2xl backdrop-blur-3xl">
+                  <ZoomIn className="w-6 h-6 md:w-10 md:h-10 text-white/40" />
+                  <span className="text-[10px] md:text-xs font-black font-mono text-white/40">{zoomCapabilities.min}x</span>
                   <input 
                     type="range" 
                     min={zoomCapabilities.min} 
@@ -378,57 +475,86 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
                     step={zoomCapabilities.step} 
                     value={zoom} 
                     onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#00E5FF]"
+                    className="flex-1 h-2 md:h-3 bg-white/10 rounded-full appearance-none cursor-pointer accent-brand-teal shadow-inner"
                   />
-                  <span className="text-xs font-bold font-mono text-[#00E5FF]">{zoom.toFixed(1)}x</span>
+                  <span className="text-[10px] md:text-xs font-black font-mono text-brand-teal">{zoom.toFixed(1)}x</span>
                 </div>
               )}
             </div>
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.02, y: -6, boxShadow: '0 30px 60px rgba(168,85,247,0.4)' }}
+              whileTap={{ scale: 0.98 }}
               onClick={stopRecording}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#aa1111] font-bold text-lg uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,42,42,0.3)] animate-pulse"
+              className="w-full py-6 md:py-8 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-r from-brand-violet to-brand-blue font-black text-xl md:text-2xl italic uppercase tracking-tighter flex items-center justify-center gap-4 md:gap-6 shadow-[0_15px_30px_rgba(0,0,0,0.5)] md:shadow-[0_25px_50px_rgba(0,0,0,0.5)] group relative overflow-hidden"
             >
-              <Square className="w-5 h-5 fill-current" /> Stop Recording
-            </button>
+              <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 skew-x-12" />
+              <Square className="w-6 h-6 md:w-8 md:h-8 fill-current group-hover:scale-110 transition-transform" /> Stop Recording
+            </motion.button>
           </div>
         ) : (
-          <div className="flex flex-col h-full">
-            <div className="relative rounded-2xl overflow-hidden bg-black aspect-video mb-6 border border-white/10 shadow-lg">
+          <div className="flex flex-col h-full max-w-5xl mx-auto w-full">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, rotateX: 15 }}
+              animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+              className="relative rounded-[2rem] md:rounded-[3.5rem] overflow-hidden bg-black aspect-video mb-8 md:mb-12 border border-white/15 shadow-[0_25px_50px_rgba(0,0,0,0.6)] md:shadow-[0_50px_100px_rgba(0,0,0,0.6)] group transform-gpu"
+              style={{ transformStyle: 'preserve-3d' }}
+            >
               <video src={previewUrl!} controls className="w-full h-full object-contain" />
-            </div>
+              <div className="absolute inset-0 pointer-events-none border-[10px] md:border-[20px] border-black/20 rounded-[2rem] md:rounded-[3.5rem]" />
+            </motion.div>
 
             {!analysis && !isAnalyzing && (
-              <div className="flex flex-col gap-4">
-                <div className="bg-[#1A2235] rounded-xl p-4 border border-white/10">
-                  <label className="block text-sm font-bold text-[#00E5FF] uppercase tracking-wider mb-2">
-                    What are you working on? (Optional)
-                  </label>
-                  <textarea 
-                    value={userClaim}
-                    onChange={(e) => setUserClaim(e.target.value)}
-                    placeholder="e.g., '8x30s sprints for conditioning' or '50 reps of 1-2 combos'"
-                    className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#00E5FF]/50 resize-none h-20 mb-3"
-                  />
-                  {userClaim.trim() && (
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                        Requested XP
-                      </label>
-                      <input 
-                        type="number" 
-                        value={requestedXp}
-                        onChange={(e) => setRequestedXp(parseInt(e.target.value) || 0)}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#00E5FF]/50"
-                      />
-                    </div>
-                  )}
-                </div>
-                <button 
-                  onClick={analyzeVideo}
-                  className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#aa1111] font-bold text-lg uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,42,42,0.3)]"
+              <div className="flex flex-col gap-6 md:gap-10">
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-dark rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 border border-white/15 shadow-[0_20px_40px_rgba(0,0,0,0.5)] md:shadow-[0_40px_80px_rgba(0,0,0,0.5)] relative overflow-hidden group transform-gpu"
+                  style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <Play className="w-5 h-5 fill-current" /> Analyze & Verify
-                </button>
+                  <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/10 via-transparent to-transparent opacity-40 group-hover:opacity-100 transition-opacity duration-1000" />
+                  
+                  <div className="relative z-10" style={{ transform: 'translateZ(30px)' }}>
+                    <label className="block text-[9px] md:text-[11px] font-black italic uppercase tracking-[0.4em] md:tracking-[0.6em] text-brand-teal mb-4 md:mb-6 flex items-center gap-3 md:gap-4">
+                      <div className="w-6 md:w-8 h-px bg-brand-teal/30" />
+                      Session Objective
+                    </label>
+                    <textarea 
+                      value={userClaim}
+                      onChange={(e) => setUserClaim(e.target.value)}
+                      placeholder="e.g., '8x30s sprints for conditioning' or '50 reps of 1-2 combos'"
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl md:rounded-[2.5rem] p-6 md:p-8 text-base md:text-lg text-white placeholder-white/20 focus:outline-none focus:border-brand-teal/50 resize-none h-32 md:h-40 mb-6 md:mb-8 transition-all font-black italic uppercase tracking-tighter leading-relaxed shadow-inner backdrop-blur-xl"
+                    />
+                    {userClaim.trim() && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="space-y-3 md:space-y-4"
+                      >
+                        <label className="block text-[9px] md:text-[11px] font-black italic uppercase tracking-[0.3em] md:tracking-[0.5em] text-white/40 mb-3 md:mb-4 ml-2 md:ml-4">
+                          Requested XP Reward
+                        </label>
+                        <div className="relative">
+                          <input 
+                            type="number" 
+                            value={requestedXp}
+                            onChange={(e) => setRequestedXp(parseInt(e.target.value) || 0)}
+                            className="w-full bg-black/60 border border-white/10 rounded-2xl md:rounded-3xl px-6 py-4 md:px-8 md:py-6 text-xl md:text-2xl text-brand-teal focus:outline-none focus:border-brand-teal/50 font-mono font-black shadow-inner backdrop-blur-xl"
+                          />
+                          <Zap className="absolute right-6 md:right-8 top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 text-brand-teal opacity-60 drop-shadow-[0_0_10px_rgba(0,245,160,0.4)]" />
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+                <motion.button 
+                  whileHover={{ scale: 1.02, y: -8, boxShadow: '0 40px 80px rgba(168,85,247,0.4)' }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={analyzeVideo}
+                  className="w-full py-6 md:py-8 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-r from-brand-violet to-brand-blue font-black text-2xl md:text-3xl italic uppercase tracking-tighter flex items-center justify-center gap-4 md:gap-6 shadow-[0_15px_30px_rgba(0,0,0,0.5)] md:shadow-[0_30px_60px_rgba(0,0,0,0.5)] group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 skew-x-12" />
+                  <Play className="w-8 h-8 md:w-10 md:h-10 fill-current group-hover:scale-125 transition-transform drop-shadow-lg" /> Analyze & Verify
+                </motion.button>
               </div>
             )}
 
@@ -436,67 +562,108 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
 
             {analysis && (
               <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex-1 bg-[#111623] rounded-2xl p-6 border border-[#00E5FF]/30 overflow-y-auto"
+                initial={{ opacity: 0, y: 40, rotateX: 10 }}
+                animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                className="flex-1 glass-dark rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 border border-brand-teal/40 shadow-[0_30px_60px_rgba(0,0,0,0.6)] md:shadow-[0_60px_120px_rgba(0,0,0,0.6)] mb-8 md:mb-12 relative overflow-hidden group perspective-2000 transform-gpu"
+                style={{ transformStyle: 'preserve-3d' }}
               >
-                <div className="flex items-center gap-2 mb-4 text-[#00E5FF]">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <h3 className="font-bold uppercase tracking-widest">Analysis Complete</h3>
+                <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/15 via-transparent to-transparent opacity-40 group-hover:opacity-100 transition-opacity duration-1000" />
+                
+                <div className="flex items-center gap-4 md:gap-6 mb-8 md:mb-12 text-brand-teal relative z-10" style={{ transform: 'translateZ(40px)' }}>
+                  <motion.div 
+                    whileHover={{ scale: 1.1, rotate: 360 }}
+                    transition={{ duration: 0.8 }}
+                    className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-brand-teal/20 flex items-center justify-center border border-brand-teal/40 shadow-xl"
+                  >
+                    <CheckCircle2 className="w-8 h-8 md:w-10 md:h-10" />
+                  </motion.div>
+                  <h3 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter drop-shadow-lg">Analysis Complete</h3>
                 </div>
 
                 {sessionScore !== null && xpEarned !== null && (
-                  <div className="flex gap-4 mb-6">
-                    <div className="flex-1 bg-[#1A2235] rounded-xl p-4 border border-[#FF2A2A]/30 text-center relative overflow-hidden">
-                      <div className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Session Score</div>
-                      <div className="text-3xl font-black text-[#FF2A2A]">{sessionScore}<span className="text-lg text-gray-500">/100</span></div>
-                    </div>
-                    <div className={`flex-1 bg-[#1A2235] rounded-xl p-4 border ${isVerified === false ? 'border-gray-600' : 'border-[#00E5FF]/30'} text-center relative overflow-hidden`}>
-                      <div className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">XP Earned</div>
-                      <div className={`text-3xl font-black ${isVerified === false ? 'text-gray-500' : 'text-[#00E5FF]'}`}>+{xpEarned}</div>
-                      {isVerified === false && <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-[1px]"><span className="text-[#FF2A2A] font-bold text-xs uppercase tracking-widest rotate-[-15deg] border-2 border-[#FF2A2A] px-2 py-1">Failed</span></div>}
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-10 md:mb-16 relative z-10" style={{ transform: 'translateZ(30px)' }}>
+                    <motion.div 
+                      whileHover={{ y: -10, scale: 1.03, rotateY: -5 }}
+                      className="glass-dark rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border border-brand-violet/40 text-center relative overflow-hidden group shadow-xl md:shadow-2xl transform-gpu"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-brand-violet/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                      <div className="text-[9px] md:text-[11px] text-white/40 uppercase tracking-[0.3em] md:tracking-[0.5em] font-black italic mb-2 md:mb-4 relative z-10">Session Score</div>
+                      <div className="text-5xl md:text-7xl font-black text-brand-violet relative z-10 drop-shadow-[0_10px_20px_rgba(168,85,247,0.4)]">{sessionScore}<span className="text-xl md:text-2xl text-gray-500 font-mono opacity-50">/100</span></div>
+                    </motion.div>
+                    <motion.div 
+                      whileHover={{ y: -10, scale: 1.03, rotateY: 5 }}
+                      className={`glass-dark rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 border ${isVerified === false ? 'border-gray-600' : 'border-brand-teal/40'} text-center relative overflow-hidden group shadow-xl md:shadow-2xl transform-gpu`}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                      <div className="text-[9px] md:text-[11px] text-white/40 uppercase tracking-[0.3em] md:tracking-[0.5em] font-black italic mb-2 md:mb-4 relative z-10">XP Earned</div>
+                      <div className={`text-5xl md:text-7xl font-black relative z-10 drop-shadow-[0_10px_20px_rgba(0,245,160,0.4)] ${isVerified === false ? 'text-gray-500' : 'text-brand-teal'}`}>+{xpEarned}</div>
+                      {isVerified === false && (
+                        <div className="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-md z-20">
+                          <motion.span 
+                            initial={{ scale: 0, rotate: -45 }}
+                            animate={{ scale: 1, rotate: -15 }}
+                            className="text-brand-violet font-black text-xl md:text-2xl uppercase tracking-[0.2em] md:tracking-[0.3em] border-4 md:border-8 border-brand-violet px-6 py-3 md:px-10 md:py-5 rounded-2xl md:rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.6)] md:shadow-[0_0_50px_rgba(168,85,247,0.6)]"
+                          >
+                            Failed
+                          </motion.span>
+                        </div>
+                      )}
+                    </motion.div>
                   </div>
                 )}
 
-                <div className="prose prose-invert prose-sm max-w-none prose-headings:text-[#00E5FF] prose-a:text-[#FF2A2A]">
+                <div className="prose prose-invert prose-base md:prose-lg max-w-none prose-headings:text-brand-teal prose-headings:font-black prose-headings:italic prose-headings:uppercase prose-headings:tracking-tighter prose-p:text-white/70 prose-p:font-medium prose-li:text-white/70 prose-li:font-medium relative z-10 leading-relaxed italic" style={{ transform: 'translateZ(20px)' }}>
                   {analysis.split('\n').map((line, i) => {
-                    if (line.startsWith('###')) return <h4 key={i} className="text-md font-bold mt-4 mb-2 text-white">{line.replace('###', '')}</h4>;
-                    if (line.startsWith('##')) return <h3 key={i} className="text-lg font-bold mt-6 mb-3 text-[#00E5FF] uppercase">{line.replace('##', '')}</h3>;
-                    if (line.startsWith('#')) return <h2 key={i} className="text-xl font-black mt-8 mb-4 text-[#FF2A2A] uppercase">{line.replace('#', '')}</h2>;
-                    if (line.startsWith('-')) return <li key={i} className="ml-4 mb-1 text-gray-300">{line.replace('-', '')}</li>;
-                    if (line.startsWith('*')) return <li key={i} className="ml-4 mb-1 text-gray-300">{line.replace('*', '')}</li>;
-                    if (line.trim() === '') return <br key={i} />;
-                    return <p key={i} className="mb-2 text-gray-300">{line}</p>;
+                    if (line.startsWith('###')) return <h4 key={i} className="text-xl md:text-2xl mt-8 md:mt-10 mb-4 md:mb-5 text-white drop-shadow-md">{line.replace('###', '')}</h4>;
+                    if (line.startsWith('##')) return <h3 key={i} className="text-2xl md:text-3xl mt-10 md:mt-12 mb-5 md:mb-6 drop-shadow-lg">{line.replace('##', '')}</h3>;
+                    if (line.startsWith('#')) return <h2 key={i} className="text-3xl md:text-4xl mt-12 md:mt-16 mb-6 md:mb-8 text-brand-violet drop-shadow-xl">{line.replace('#', '')}</h2>;
+                    if (line.startsWith('-')) return <li key={i} className="ml-4 md:ml-6 mb-3 md:mb-4 list-none flex items-start gap-3 md:gap-4"><div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-brand-teal rounded-full mt-2 md:mt-2.5 shrink-0 shadow-[0_0_10px_rgba(0,245,160,0.6)]" />{line.replace('-', '')}</li>;
+                    if (line.startsWith('*')) return <li key={i} className="ml-4 md:ml-6 mb-3 md:mb-4 list-none flex items-start gap-3 md:gap-4"><div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-brand-teal rounded-full mt-2 md:mt-2.5 shrink-0 shadow-[0_0_10px_rgba(0,245,160,0.6)]" />{line.replace('*', '')}</li>;
+                    if (line.trim() === '') return <div key={i} className="h-4 md:h-6" />;
+                    return <p key={i} className="mb-4 md:mb-6 opacity-90">{line}</p>;
                   })}
                 </div>
 
                 {groundingUrls.length > 0 && (
-                  <div className="mt-8 border-t border-white/10 pt-6">
-                    <h3 className="text-lg font-bold uppercase tracking-widest text-[#00E5FF] mb-4">Reference Videos</h3>
-                    <div className="space-y-3">
+                  <div className="mt-12 md:mt-20 pt-10 md:pt-16 border-t border-white/10 relative z-10" style={{ transform: 'translateZ(30px)' }}>
+                    <div className="flex items-center gap-4 md:gap-5 mb-8 md:mb-10">
+                      <div className="p-2 md:p-3 bg-brand-teal/20 rounded-xl md:rounded-2xl border border-brand-teal/40 shadow-lg">
+                        <Youtube className="w-6 h-6 md:w-8 md:h-8 text-brand-teal" />
+                      </div>
+                      <h3 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-brand-teal drop-shadow-lg">Reference Videos</h3>
+                    </div>
+                    <div className="grid gap-6 md:gap-8">
                       {groundingUrls.map((url, i) => (
-                        <a 
+                        <motion.a 
                           key={i} 
                           href={url.uri} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="block p-4 rounded-xl border border-[#1A2235] bg-[#1A2235]/30 hover:border-[#FF2A2A]/50 transition-all"
+                          whileHover={{ x: 15, scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)', z: 50 }}
+                          className="block p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-white/10 bg-black/40 hover:border-brand-violet/50 transition-all shadow-xl md:shadow-2xl backdrop-blur-2xl group transform-gpu"
+                          style={{ transformStyle: 'preserve-3d' }}
                         >
-                          <h4 className="font-bold text-white text-sm line-clamp-2">{url.title}</h4>
-                          <p className="text-xs text-[#00E5FF] mt-1 truncate">{url.uri}</p>
-                        </a>
+                          <div className="flex justify-between items-start mb-3 md:mb-4" style={{ transform: 'translateZ(20px)' }}>
+                            <h4 className="font-black italic uppercase tracking-tighter text-white text-xl md:text-2xl line-clamp-2 mb-2 group-hover:text-brand-teal transition-colors leading-tight">{url.title}</h4>
+                            <div className="p-2 md:p-3 bg-white/10 rounded-lg md:rounded-xl group-hover:bg-brand-teal/30 transition-all shadow-lg">
+                              <ExternalLink className="w-5 h-5 md:w-6 md:h-6 text-white/40 group-hover:text-brand-teal" />
+                            </div>
+                          </div>
+                          <p className="text-[10px] md:text-xs text-brand-teal font-mono truncate opacity-60 group-hover:opacity-100 transition-opacity" style={{ transform: 'translateZ(10px)' }}>{url.uri}</p>
+                        </motion.a>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.02, y: -4, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => { setFile(null); setPreviewUrl(null); setAnalysis(null); setAnalysisDrillIds([]); setGroundingUrls([]); setUserClaim(""); setSessionScore(null); setXpEarned(null); setIsVerified(null); }}
-                  className="w-full mt-8 py-3 rounded-xl border border-white/20 font-bold uppercase tracking-wider hover:bg-white/5 transition-colors"
+                  className="w-full mt-12 md:mt-20 py-6 md:py-8 rounded-[2rem] md:rounded-[2.5rem] border border-white/15 glass-dark font-black italic uppercase tracking-[0.2em] md:tracking-[0.4em] text-sm md:text-base hover:bg-white/10 transition-all shadow-xl md:shadow-2xl backdrop-blur-3xl relative z-10"
                 >
                   Analyze Another Clip
-                </button>
+                </motion.button>
               </motion.div>
             )}
           </div>

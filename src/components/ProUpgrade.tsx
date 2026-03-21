@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Crown, Check, X } from 'lucide-react';
+import { Crown, Check, X, AlertCircle, Loader2 } from 'lucide-react';
 
-export default function ProUpgrade({ onBack, onUpgrade }: { onBack: () => void, onUpgrade: () => void }) {
+export default function ProUpgrade({ onBack, onUpgrade, checkoutError }: { onBack: () => void, onUpgrade: () => void, checkoutError?: string | null }) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleUpgrade = async () => {
+    setIsLoading(true);
+    await onUpgrade();
+    setIsLoading(false);
+  };
+
   return (
     <div className="h-full flex flex-col p-6 relative bg-[#0B0F19] text-white overflow-y-auto hide-scrollbar">
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] z-50 opacity-20 mix-blend-overlay"></div>
@@ -41,14 +50,26 @@ export default function ProUpgrade({ onBack, onUpgrade }: { onBack: () => void, 
           <Feature text="10,000 V-Coins Sign-up Bonus" />
         </div>
 
+        {checkoutError && (
+          <div className="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 mb-6">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-200 leading-relaxed text-left">
+              {checkoutError.includes('STRIPE_SECRET_KEY') 
+                ? 'Stripe is not configured. Please add your STRIPE_SECRET_KEY to the environment variables to enable payments.'
+                : checkoutError}
+            </p>
+          </div>
+        )}
+
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={onUpgrade}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#00E5FF] font-black text-lg uppercase tracking-widest shadow-[0_0_30px_rgba(255,42,42,0.4)] relative overflow-hidden group"
+          onClick={handleUpgrade}
+          disabled={isLoading}
+          className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#00E5FF] font-black text-lg uppercase tracking-widest shadow-[0_0_30px_rgba(255,42,42,0.4)] relative overflow-hidden group disabled:opacity-50"
         >
           <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
-          Upgrade Now - $14.99/mo
+          {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Upgrade Now - $14.99/mo'}
         </motion.button>
         <p className="text-xs text-gray-500 mt-4 text-center">Cancel anytime. Billed monthly.</p>
       </div>

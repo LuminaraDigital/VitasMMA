@@ -1,0 +1,6 @@
+{
+	"appId": "com.vitasmma.app",
+	"appName": "VitasMMA",
+	"webDir": "dist",
+	"bundledWebRuntime": false
+}

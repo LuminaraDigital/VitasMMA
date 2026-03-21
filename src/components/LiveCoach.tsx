@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Mic, MicOff, Activity, Loader2, Upload, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Activity, Loader2, Upload, Image as ImageIcon, Link as LinkIcon, XCircle } from 'lucide-react';
 import { GoogleGenAI, Modality } from '@google/genai';
+import { getAIContext } from '../utils/aiContext';
 import { UserProfile } from '../types';
 
 export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profile: UserProfile, onBack: () => void, onUpdateProfile: (p: UserProfile) => void }) {
@@ -29,14 +30,25 @@ export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profil
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
-      const historyContext = profile.analysisHistory && profile.analysisHistory.length > 0
-        ? `\n\nPAST SESSIONS & ANALYSIS:\n${profile.analysisHistory.slice(-3).map((a, i) => `--- Session ${i+1} ---\n${a}`).join('\n\n')}`
-        : "";
+      const systemInstruction = `You are Vitas, an elite AI combat strategist and MMA coach. You are gritty, direct, and have zero tolerance for mediocrity. Your knowledge of martial arts is absolute.
+      
+${getAIContext(profile)}
 
-      const systemInstruction = `You are Vitas, an elite AI MMA fight coach. You are gritty, direct, and highly knowledgeable about all martial arts. The user is a ${profile.baseStyle} fighter, stance: ${profile.stance}, archetype: ${profile.archetype}. Keep responses concise, intense, and focused on improvement. You have access to Google Search to find specific techniques, drills, or YouTube fights to reference. If you find a good video or resource, mention it and provide the link. If the user uploads a photo, analyze their form or homework proof.${historyContext}`;
+Your tone:
+- Gritty, intense, and authoritative.
+- Direct and no-nonsense.
+- Use combat terminology (e.g., "check the leg", "cut the angle", "sink the choke").
+- Focus on high-level improvement and tactical dominance.
+
+Your capabilities:
+- You have access to Google Search to find specific techniques, drills, or YouTube fights to reference.
+- If you find a good video or resource, mention it and provide the link.
+- If the user uploads a photo, analyze their form or homework proof with surgical precision.
+
+Keep responses concise and focused on the next evolution of their game.`;
 
       const sessionPromise = ai.live.connect({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        model: "gemini-2.5-flash-native-audio-preview-12-2025",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -134,7 +146,7 @@ export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profil
         sessionPromise.then((session) => {
           if (isConnected) {
             session.sendRealtimeInput({
-              media: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+              audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
             });
           }
         });
@@ -248,7 +260,7 @@ export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profil
         
         if (sessionRef.current && isConnected) {
           sessionRef.current.sendRealtimeInput({
-            media: { data: base64data, mimeType: 'image/jpeg' }
+            video: { data: base64data, mimeType: 'image/jpeg' }
           });
         }
       };
@@ -263,106 +275,209 @@ export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profil
   }, []);
 
   return (
-    <div className="h-full p-6 flex flex-col bg-[#0B0F19] text-white overflow-y-auto hide-scrollbar">
-      <header className="flex items-center gap-4 mb-12 shrink-0">
-        <button onClick={() => { disconnectLive(); onBack(); }} className="p-2 bg-[#1A2235] rounded-full hover:bg-[#2A3245] transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold uppercase tracking-wider">Voice Coach</h1>
+    <div className="h-full flex flex-col bg-brand-bg text-white overflow-hidden relative font-sans">
+      {/* Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-brand-violet/10 rounded-full blur-[150px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] bg-brand-teal/10 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '3s' }} />
+        <div className="absolute inset-0 opacity-[0.05] pointer-events-none mix-blend-overlay" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/carbon-fibre.png")' }} />
+        
+        {/* Dynamic Grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+      </div>
+
+      <header className="sticky top-0 z-50 glass-dark px-4 md:px-6 py-4 md:py-6 flex items-center gap-4 md:gap-6 border-b border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+        <motion.button 
+          whileHover={{ scale: 1.1, x: -2, backgroundColor: 'rgba(255,255,255,0.1)' }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => { disconnectLive(); onBack(); }} 
+          className="p-2 md:p-3 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-xl"
+        >
+          <ArrowLeft className="w-5 h-5 text-white/80" />
+        </motion.button>
+        <div className="flex flex-col">
+          <h1 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-gradient leading-none">Voice Coach</h1>
+          <div className="flex items-center gap-2 mt-1 md:mt-1.5">
+            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isConnected ? 'bg-brand-teal' : 'bg-white/20'}`} />
+            <span className="text-[8px] md:text-[9px] font-black italic uppercase tracking-[0.3em] md:tracking-[0.4em] text-white/40">Live AI Link</span>
+          </div>
+        </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center relative">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
         {groundingUrls.length > 0 && (
-          <div className="absolute top-0 left-0 right-0 p-4 z-20">
-            <div className="bg-[#1A2235]/90 backdrop-blur-md border border-[#00E5FF]/30 rounded-xl p-3 max-h-32 overflow-y-auto hide-scrollbar">
-              <h3 className="text-xs text-[#00E5FF] font-bold uppercase tracking-widest mb-2 flex items-center gap-1"><LinkIcon className="w-3 h-3" /> Coach References</h3>
-              <ul className="space-y-2">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute top-4 md:top-8 left-4 md:left-8 right-4 md:right-8 z-20"
+          >
+            <div className="glass-dark border border-brand-teal/20 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 max-h-56 overflow-y-auto hide-scrollbar shadow-[0_30px_60px_rgba(0,0,0,0.6)] backdrop-blur-3xl">
+              <h3 className="text-[10px] text-brand-teal font-black italic uppercase tracking-[0.4em] mb-4 md:mb-5 flex items-center gap-3">
+                <LinkIcon className="w-3.5 h-3.5" /> Coach References
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                 {groundingUrls.map((url, i) => (
-                  <li key={i}>
-                    <a href={url.uri} target="_blank" rel="noreferrer" className="text-xs text-gray-300 hover:text-white hover:underline line-clamp-1">
+                  <motion.li 
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="list-none"
+                  >
+                    <a 
+                      href={url.uri} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="glass p-3 rounded-xl text-xs text-white/60 hover:text-brand-teal transition-all line-clamp-1 font-bold flex items-center gap-3 group border border-white/5 hover:border-brand-teal/30"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-brand-teal/40 group-hover:bg-brand-teal group-hover:scale-125 transition-all" />
                       {url.title || url.uri}
                     </a>
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
+              </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {uploadedImage && (
-          <div className="absolute top-4 right-4 z-20 w-24 h-24 rounded-lg overflow-hidden border-2 border-[#00E5FF]/50 shadow-lg">
-            <img src={uploadedImage} alt="Uploaded proof" className="w-full h-full object-cover" />
-            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[10px] text-center py-0.5 font-bold">SENT TO COACH</div>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+            animate={{ opacity: 1, scale: 1, rotate: -5 }}
+            whileHover={{ scale: 1.1, rotate: 0 }}
+            className="absolute top-4 md:top-8 right-4 md:right-8 z-20 w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-[2.5rem] overflow-hidden border-2 border-brand-teal/40 shadow-[0_30px_60px_rgba(0,0,0,0.5)] group cursor-pointer"
+          >
+            <img src={uploadedImage} alt="Uploaded proof" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="text-[8px] font-black italic uppercase tracking-widest text-white">View Proof</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-brand-teal/90 text-[7px] md:text-[9px] text-black text-center py-1 md:py-2 font-black italic uppercase tracking-widest backdrop-blur-md">SENT TO COACH</div>
+          </motion.div>
         )}
 
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {isConnected && (
             <>
-              <motion.div 
-                className="absolute w-64 h-64 border border-[#00E5FF]/20 rounded-full"
-                animate={{ scale: [1, 1.5, 2], opacity: [0.5, 0, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              />
-              <motion.div 
-                className="absolute w-64 h-64 border border-[#00E5FF]/20 rounded-full"
-                animate={{ scale: [1, 1.5, 2], opacity: [0.5, 0, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 1 }}
-              />
+              {[1, 2, 3, 4].map((i) => (
+                <motion.div 
+                  key={i}
+                  className="absolute w-64 h-64 md:w-96 md:h-96 border border-brand-teal/10 rounded-full"
+                  animate={{ 
+                    scale: [1, 2, 3], 
+                    opacity: [0.4, 0.1, 0],
+                    borderWidth: ['1px', '3px', '1px']
+                  }}
+                  transition={{ 
+                    duration: 4, 
+                    repeat: Infinity, 
+                    ease: "easeOut", 
+                    delay: i * 1 
+                  }}
+                />
+              ))}
             </>
           )}
         </div>
 
-        <div className="relative z-10 flex flex-col items-center">
+        <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
           <motion.div 
-            className={`w-40 h-40 rounded-full flex items-center justify-center mb-8 shadow-2xl transition-colors duration-500 ${isConnected ? (isSpeaking ? 'bg-[#FF2A2A]/20 shadow-[0_0_50px_rgba(255,42,42,0.4)]' : 'bg-[#00E5FF]/20 shadow-[0_0_50px_rgba(0,229,255,0.4)]') : 'bg-[#1A2235]'}`}
-            animate={isSpeaking ? { scale: [1, 1.05, 1] } : {}}
-            transition={{ duration: 0.5, repeat: Infinity }}
+            className={`w-48 h-48 md:w-64 md:h-64 rounded-full flex items-center justify-center mb-8 md:mb-12 shadow-[0_0_120px_rgba(0,0,0,0.6)] transition-all duration-1000 relative perspective-2000 ${isConnected ? (isSpeaking ? 'bg-brand-violet/5' : 'bg-brand-teal/5') : 'bg-white/5'}`}
+            animate={isSpeaking ? { 
+              scale: [1, 1.08, 1],
+              rotateY: [0, 10, -10, 0],
+              rotateX: [0, -10, 10, 0],
+              z: [0, 50, 0]
+            } : {
+              rotateY: [0, 5, -5, 0],
+              rotateX: [0, -5, 5, 0]
+            }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           >
-            <div className={`w-32 h-32 rounded-full flex items-center justify-center ${isConnected ? (isSpeaking ? 'bg-[#FF2A2A]' : 'bg-[#00E5FF]') : 'bg-[#2A3245]'}`}>
+            {/* 3D Sphere Glow */}
+            <div className={`absolute inset-4 rounded-full blur-3xl opacity-30 transition-colors duration-1000 ${isConnected ? (isSpeaking ? 'bg-brand-violet' : 'bg-brand-teal') : 'bg-white/10'}`} />
+            
+            <div className={`w-36 h-36 md:w-52 md:h-52 rounded-full flex items-center justify-center transition-all duration-1000 relative z-10 overflow-hidden shadow-[inset_0_0_50px_rgba(0,0,0,0.5)] border border-white/10 ${isConnected ? (isSpeaking ? 'bg-brand-violet' : 'bg-brand-teal') : 'bg-white/5'}`}>
+              {/* Specular Highlights */}
+              <div className="absolute top-[15%] left-[25%] w-[40%] h-[40%] bg-white/20 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute bottom-[20%] right-[20%] w-[20%] h-[20%] bg-black/20 rounded-full blur-xl pointer-events-none" />
+              
               {isConnecting ? (
-                <Loader2 className="w-12 h-12 text-white animate-spin" />
+                <Loader2 className="w-20 h-20 text-white animate-spin opacity-80" />
               ) : isConnected ? (
-                <Activity className="w-16 h-16 text-white" />
+                <motion.div
+                  animate={isSpeaking ? { 
+                    scale: [1, 1.3, 1],
+                    filter: ['brightness(1)', 'brightness(1.5)', 'brightness(1)']
+                  } : {}}
+                  transition={{ duration: 0.4, repeat: Infinity }}
+                >
+                  <Activity className="w-28 h-28 text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.6)]" />
+                </motion.div>
               ) : (
-                <MicOff className="w-12 h-12 text-gray-400" />
+                <MicOff className="w-20 h-20 text-white/20" />
               )}
             </div>
           </motion.div>
 
-          <h2 className="text-2xl font-black uppercase tracking-widest mb-2">
-            {isConnecting ? 'Connecting...' : isConnected ? 'Coach Vitas' : 'Ready to Train'}
-          </h2>
-          <p className="text-gray-400 text-center max-w-xs mb-12 h-12">
-            {isConnecting ? 'Establishing secure link to AI Coach...' : 
-             isConnected ? (isSpeaking ? 'Coach is speaking...' : 'Listening... Ask for advice on technique, strategy, or conditioning.') : 
-             'Tap connect to start a live voice session with your AI Coach.'}
-          </p>
+          <div className="text-center space-y-2 md:space-y-4 mb-8 md:mb-16">
+            <h2 className="text-2xl md:text-5xl font-black italic uppercase tracking-tighter text-gradient">
+              {isConnecting ? 'Establishing Link' : isConnected ? 'Coach Vitas' : 'Ready to Train'}
+            </h2>
+            <div className="h-12 md:h-20 flex items-center justify-center">
+              <p className="text-white/40 text-center max-w-sm font-bold leading-relaxed text-[10px] md:text-sm px-4 md:px-6 italic">
+                {isConnecting ? 'Syncing neural patterns with elite combat database...' : 
+                 isConnected ? (isSpeaking ? 'Coach is analyzing your performance...' : 'Awaiting your command. Ask for strategy, drills, or analysis.') : 
+                 'Initiate a secure voice link for real-time combat guidance.'}
+              </p>
+            </div>
+          </div>
 
-          {error && <p className="text-[#FF2A2A] mb-6">{error}</p>}
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              className="px-4 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 font-black italic uppercase tracking-[0.2em] text-[9px] md:text-[10px] mb-6 md:mb-10 shadow-2xl backdrop-blur-xl flex items-center justify-between"
+            >
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="p-1 hover:bg-red-500/20 rounded-full transition-colors ml-4">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
 
           {!isConnected && !isConnecting ? (
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.05, y: -8, rotateX: 10 }}
+              whileTap={{ scale: 0.95 }}
               onClick={connectLive}
-              className="px-8 py-4 rounded-full bg-gradient-to-r from-[#00E5FF] to-[#0099ff] font-bold text-lg uppercase tracking-wider flex items-center gap-3 shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:scale-105 transition-transform"
+              className="group relative px-6 md:px-16 py-4 md:py-8 rounded-2xl md:rounded-[2.5rem] bg-gradient-to-br from-brand-teal via-brand-blue to-brand-teal bg-[length:200%_200%] animate-gradient font-black text-lg md:text-3xl italic uppercase tracking-tighter flex items-center gap-3 md:gap-6 shadow-[0_20px_50px_rgba(0,229,255,0.4)] md:shadow-[0_30px_70px_rgba(0,229,255,0.4)] text-black overflow-hidden"
             >
-              <Mic className="w-5 h-5" /> Connect to Coach
-            </button>
+              <div className="absolute inset-0 bg-white/30 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-expo" />
+              <Mic className="w-5 h-5 md:w-8 md:h-8 relative z-10" /> 
+              <span className="relative z-10">Connect Link</span>
+            </motion.button>
           ) : (
-            <div className="flex flex-col items-center gap-4">
-              <button 
+            <div className="flex flex-col items-center gap-4 md:gap-10 w-full">
+              <motion.button 
+                whileHover={{ scale: 1.05, y: -4 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={disconnectLive}
-                className="px-8 py-4 rounded-full bg-transparent border-2 border-[#FF2A2A] text-[#FF2A2A] font-bold text-lg uppercase tracking-wider flex items-center gap-3 hover:bg-[#FF2A2A]/10 transition-colors"
+                className="px-6 md:px-16 py-4 md:py-8 rounded-2xl md:rounded-[2.5rem] bg-transparent border-2 border-brand-violet text-brand-violet font-black text-lg md:text-3xl italic uppercase tracking-tighter flex items-center gap-3 md:gap-6 hover:bg-brand-violet/10 transition-all shadow-[0_15px_40px_rgba(168,85,247,0.3)] md:shadow-[0_20px_50px_rgba(168,85,247,0.3)] backdrop-blur-md"
               >
-                <MicOff className="w-5 h-5" /> End Session
-              </button>
+                <MicOff className="w-5 h-5 md:w-8 md:h-8" /> End Session
+              </motion.button>
               
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05, y: -4, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 rounded-full bg-[#1A2235] border border-white/10 text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2 hover:bg-[#2A3245] transition-colors"
+                className="px-5 md:px-12 py-3 md:py-6 rounded-xl md:rounded-[2rem] glass border border-white/10 text-white font-black text-[10px] md:text-sm italic uppercase tracking-[0.2em] md:tracking-[0.3em] flex items-center gap-2 md:gap-5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] md:hover:shadow-[0_25px_60px_rgba(0,0,0,0.4)] transition-all"
               >
-                <ImageIcon className="w-4 h-4 text-[#00E5FF]" /> Send Photo Proof
-              </button>
+                <div className="p-1.5 md:p-2 bg-brand-teal/20 rounded-lg">
+                  <ImageIcon className="w-4 h-4 md:w-6 md:h-6 text-brand-teal" />
+                </div>
+                Send Photo Proof
+              </motion.button>
               <input 
                 type="file" 
                 accept="image/*" 

@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - The user's ID
+    //   - firstName: string (optional)
+    //   - lastName: string (optional)
+    //   - nickname: string (optional)
+    //   - height: string (optional)
+    //   - weight: number (optional)
+    //   - gender: string (optional)
+    //   - weightClass: string (optional)
+    //   - targetWeightClass: string (optional)
+    //   - competitionLevel: string (optional)
+    //   - baseStyle: string (required)
+    //   - stance: string (required)
+    //   - striking: number (required)
+    //   - grappling: number (required)
+    //   - clinch: number (required)
+    //   - archetype: string (required)
+    //   - xp: number (required)
+    //   - level: number (required)
+    //   - streak: number (required)
+    //   - lastActiveDate: string (optional)
+    //   - activeDrills: list (required)
+    //   - analysisHistory: list (required)
+    //   - activeCamp: map (optional)
+    //   - badges: list (optional)
+    //   - isPro: boolean (optional)
+    //   - coins: number (optional)
+    //   - dailyQuests: list (optional)
+    //   - unlockedModules: list (optional)
+    //   - strengthLogs: list (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['baseStyle', 'stance', 'striking', 'grappling', 'clinch', 'archetype', 'xp', 'level', 'streak', 'activeDrills', 'analysisHistory', 'uid']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.baseStyle is string && data.baseStyle.size() < 100 &&
+             data.stance is string && data.stance.size() < 50 &&
+             data.striking is number && data.striking >= 0 && data.striking <= 100 &&
+             data.grappling is number && data.grappling >= 0 && data.grappling <= 100 &&
+             data.clinch is number && data.clinch >= 0 && data.clinch <= 100 &&
+             data.archetype is string && data.archetype.size() < 100 &&
+             data.xp is number && data.xp >= 0 &&
+             data.level is number && data.level >= 1 &&
+             data.streak is number && data.streak >= 0 &&
+             data.activeDrills is list && data.activeDrills.size() <= 100 &&
+             data.analysisHistory is list && data.analysisHistory.size() <= 1000 &&
+             (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100)) &&
+             (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 100)) &&
+             (!('nickname' in data) || (data.nickname is string && data.nickname.size() <= 100)) &&
+             (!('height' in data) || (data.height is string && data.height.size() <= 50)) &&
+             (!('weight' in data) || (data.weight is number && data.weight >= 0)) &&
+             (!('gender' in data) || (data.gender in ['Male', 'Female'])) &&
+             (!('weightClass' in data) || (data.weightClass is string && data.weightClass.size() <= 100)) &&
+             (!('targetWeightClass' in data) || (data.targetWeightClass is string && data.targetWeightClass.size() <= 100)) &&
+             (!('competitionLevel' in data) || (data.competitionLevel in ['Hobbyist', 'Amateur', 'Professional'])) &&
+             (!('lastActiveDate' in data) || (data.lastActiveDate is string && data.lastActiveDate.size() <= 100)) &&
+             (!('activeCamp' in data) || data.activeCamp == null || data.activeCamp is map) &&
+             (!('badges' in data) || (data.badges is list && data.badges.size() <= 1000)) &&
+             (!('isPro' in data) || data.isPro is bool) &&
+             (!('coins' in data) || (data.coins is number && data.coins >= 0)) &&
+             (!('dailyQuests' in data) || (data.dailyQuests is list && data.dailyQuests.size() <= 50)) &&
+             (!('unlockedModules' in data) || (data.unlockedModules is list && data.unlockedModules.size() <= 100)) &&
+             (!('strengthLogs' in data) || (data.strengthLogs is list && data.strengthLogs.size() <= 1000));
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
+      allow update: if isOwner(userId) && isDocOwner() && isValidUser(request.resource.data) && uidNotModified();
+      allow delete: if isOwner(userId) && isDocOwner();
+    }
+  }
+}

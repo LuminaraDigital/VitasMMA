@@ -64,44 +64,126 @@ export default function TrainingHub({ profile, onUpdateProfile, onBack }: { prof
   const progressPercentage = Math.round((unlocked.length / MODULES.length) * 100);
 
   return (
-    <div className="h-full flex flex-col p-6 relative bg-[#0B0F19] text-white overflow-y-auto hide-scrollbar">
-      <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-[#00E5FF]/10 rounded-full blur-[100px] pointer-events-none"></div>
-      
-      <header className="flex justify-between items-center mb-6 relative z-10">
-        <button onClick={onBack} className="p-2 bg-[#1A2235] rounded-full hover:bg-gray-800 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-black uppercase tracking-widest italic">Training Hub</h1>
-        <div className="flex items-center gap-1 bg-[#1A2235] px-3 py-1.5 rounded-full border border-yellow-500/30">
-          <Coins className="text-yellow-500 w-4 h-4" />
-          <span className="font-bold font-mono text-yellow-500">{profile.coins || 0}</span>
-        </div>
-      </header>
-
-      <div className="mb-8 relative z-10">
-        <div className="bg-[#111623] border border-[#1A2235] rounded-2xl p-5 shadow-lg">
-          <div className="flex justify-between items-end mb-2">
-            <div>
-              <h2 className="text-xs text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3"/> Mastery Progress</h2>
-              <p className="text-2xl font-black">{progressPercentage}%</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-[#00E5FF] font-mono">{unlocked.length} / {MODULES.length} Modules</p>
-            </div>
-          </div>
-          <div className="h-2 bg-[#0B0F19] rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-gradient-to-r from-[#FF2A2A] to-[#00E5FF]"
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercentage}%` }}
-              transition={{ duration: 1, ease: "easeOut" }}
+    <div className="h-full flex flex-col p-6 relative bg-brand-bg text-white overflow-y-auto hide-scrollbar pb-24 font-sans">
+      {/* Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[70%] h-[70%] bg-brand-teal/20 rounded-full blur-[120px] animate-pulse opacity-50" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] bg-brand-violet/20 rounded-full blur-[120px] animate-pulse opacity-50" style={{ animationDelay: '3s' }} />
+        <div className="absolute top-[20%] right-[10%] w-[40%] h-[40%] bg-brand-blue/10 rounded-full blur-[100px] animate-pulse opacity-30" style={{ animationDelay: '1.5s' }} />
+        
+        {/* Animated Grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,#000_70%,transparent_100%)]" />
+        
+        {/* Floating Particles Simulation */}
+        <div className="absolute inset-0 opacity-20">
+          {[...Array(6)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 bg-white rounded-full"
+              animate={{
+                y: [0, -100, 0],
+                x: [0, Math.random() * 50 - 25, 0],
+                opacity: [0, 1, 0],
+                scale: [0, 1.5, 0]
+              }}
+              transition={{
+                duration: 5 + Math.random() * 5,
+                repeat: Infinity,
+                delay: Math.random() * 5,
+                ease: "easeInOut"
+              }}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`
+              }}
             />
-          </div>
+          ))}
         </div>
       </div>
+      
+      <header className="sticky top-0 z-50 glass-dark px-6 py-6 flex items-center justify-between border-b border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-3xl -mx-6 rounded-b-[3.5rem]">
+        <motion.button 
+          whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
+          whileTap={{ scale: 0.9 }}
+          onClick={onBack} 
+          className="p-3.5 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
+        >
+          <ChevronLeft className="w-6 h-6 text-white/90" />
+        </motion.button>
+        <div className="flex flex-col items-center">
+          <motion.h1 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+          >
+            Training Hub
+          </motion.h1>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-2 h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
+            <span className="text-[10px] font-black italic uppercase tracking-[0.5em] text-white/50">Skill Evolution</span>
+          </div>
+        </div>
+        <motion.div 
+          whileHover={{ scale: 1.05, y: -2 }}
+          className="flex items-center gap-3 bg-black/60 px-6 py-3.5 rounded-2xl border border-yellow-500/40 shadow-[0_0_40px_rgba(234,179,8,0.2)] backdrop-blur-2xl"
+        >
+          <Coins className="text-yellow-500 w-6 h-6 drop-shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+          <span className="font-black font-mono text-xl text-yellow-500 leading-none">{profile.coins || 0}</span>
+        </motion.div>
+      </header>
 
-      <div className="space-y-4 relative z-10 pb-8">
-        <h3 className="text-sm text-gray-400 uppercase tracking-widest mb-2">Available Modules</h3>
+      <div className="mt-12 mb-20 relative z-10 perspective-2000">
+        <motion.div 
+          initial={{ opacity: 0, y: 40, rotateX: 20 }}
+          animate={{ opacity: 1, y: 0, rotateX: 0 }}
+          whileHover={{ rotateX: 8, rotateY: -8, scale: 1.03, z: 100 }}
+          transition={{ type: "spring", stiffness: 100, damping: 15 }}
+          className="glass-dark rounded-[3.5rem] p-12 shadow-[0_50px_100px_rgba(0,0,0,0.7)] relative overflow-hidden border border-white/15 group transform-gpu"
+          style={{ transformStyle: 'preserve-3d' }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/20 via-transparent to-brand-violet/20 opacity-40 group-hover:opacity-100 transition-opacity duration-1000" />
+          <div className="absolute -inset-[100%] bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_0%,transparent_50%)] group-hover:animate-[spin_10s_linear_infinite] pointer-events-none" />
+          
+          <div className="flex justify-between items-end mb-10 relative z-10" style={{ transform: 'translateZ(40px)' }}>
+            <div>
+              <h2 className="text-[11px] text-brand-teal font-black italic uppercase tracking-[0.6em] mb-5 flex items-center gap-4">
+                <div className="w-8 h-px bg-brand-teal/30" />
+                <TrendingUp className="w-5 h-5"/> Mastery Progress
+              </h2>
+              <p className="text-7xl font-black italic uppercase tracking-tighter text-gradient drop-shadow-[0_15px_30px_rgba(0,0,0,0.4)]">{progressPercentage}%</p>
+            </div>
+            <div className="text-right">
+              <motion.div 
+                whileHover={{ scale: 1.1 }}
+                className="inline-flex items-center gap-4 bg-brand-blue/20 px-6 py-3 rounded-2xl border border-brand-blue/30 backdrop-blur-xl shadow-xl"
+              >
+                <span className="text-[11px] text-brand-blue font-black italic uppercase tracking-[0.4em]">{unlocked.length} / {MODULES.length} Modules</span>
+              </motion.div>
+            </div>
+          </div>
+          
+          <div className="h-5 bg-black/70 rounded-full overflow-hidden relative z-10 shadow-[inset_0_4px_15px_rgba(0,0,0,0.6)] border border-white/10" style={{ transform: 'translateZ(20px)' }}>
+            <motion.div 
+              className="h-full bg-gradient-to-r from-brand-teal via-brand-blue to-brand-violet relative"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPercentage}%` }}
+              transition={{ duration: 3, ease: "circOut" }}
+            >
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.4)_50%,transparent_75%)] bg-[size:50px_50px] animate-[shimmer_2s_linear_infinite]" />
+              <div className="absolute top-0 right-0 w-12 h-full bg-white/50 blur-xl" />
+            </motion.div>
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="space-y-12 relative z-10 pb-24">
+        <div className="flex items-center justify-between mb-8 px-6">
+          <div className="flex items-center gap-5">
+            <div className="w-3 h-3 rounded-full bg-brand-teal shadow-[0_0_20px_rgba(0,245,160,0.6)] animate-pulse" />
+            <h3 className="text-[12px] text-white/60 font-black italic uppercase tracking-[0.7em]">Available Modules</h3>
+          </div>
+          <div className="h-px flex-1 bg-gradient-to-r from-white/20 via-white/10 to-transparent ml-10"></div>
+        </div>
         
         {MODULES.map((mod, i) => {
           const isUnlocked = unlocked.includes(mod.id);
@@ -110,78 +192,110 @@ export default function TrainingHub({ profile, onUpdateProfile, onBack }: { prof
           return (
             <motion.div 
               key={mod.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              className={`p-4 rounded-2xl border ${isUnlocked ? 'border-[#00E5FF]/30 bg-[#00E5FF]/5' : 'border-[#1A2235] bg-[#111623]'} relative overflow-hidden`}
+              whileHover={{ y: -15, rotateX: 5, scale: 1.03, z: 50 }}
+              className={`p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] border transition-all duration-700 relative overflow-hidden perspective-2000 group transform-gpu ${isUnlocked ? 'glass-dark border-brand-teal/40 bg-brand-teal/5 shadow-[0_40px_100px_rgba(0,0,0,0.5)]' : 'glass-dark border-white/10 bg-white/[0.03] shadow-2xl'}`}
+              style={{ transformStyle: 'preserve-3d' }}
             >
-              <div className="flex gap-4 relative z-10">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${isUnlocked ? 'bg-[#00E5FF]/20' : 'bg-[#1A2235]'}`}>
-                  {mod.icon}
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h4 className={`font-bold ${isUnlocked ? 'text-white' : 'text-gray-300'}`}>{mod.title}</h4>
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+              <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/5 rounded-full blur-[80px] group-hover:bg-brand-teal/10 transition-colors duration-1000" />
+              
+              <div className="flex flex-col lg:flex-row gap-6 md:gap-12 relative z-10">
+                <motion.div 
+                  whileHover={{ scale: 1.15, rotate: 8, translateZ: 50 }}
+                  className={`w-20 h-20 md:w-28 md:h-28 rounded-[2rem] md:rounded-[2.5rem] flex items-center justify-center text-4xl md:text-6xl shrink-0 shadow-[0_25px_50px_rgba(0,0,0,0.5)] relative group/icon transform-gpu ${isUnlocked ? 'bg-brand-teal/25 border border-brand-teal/40' : 'bg-black/50 border border-white/15'}`}
+                >
+                  <div className="absolute inset-0 bg-white/15 rounded-[2.5rem] opacity-0 group-hover/icon:opacity-100 transition-opacity duration-500" />
+                  <span className="drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)]">{mod.icon}</span>
+                </motion.div>
+                
+                <div className="flex-1" style={{ transform: 'translateZ(30px)' }}>
+                  <div className="flex flex-wrap justify-between items-start gap-4 md:gap-6 mb-6">
+                    <h4 className={`text-2xl md:text-4xl font-black italic uppercase tracking-tighter leading-none drop-shadow-lg ${isUnlocked ? 'text-white' : 'text-white/70'}`}>{mod.title}</h4>
                     {isUnlocked ? (
-                      <span className="text-xs font-bold text-[#00E5FF] flex items-center gap-1 bg-[#00E5FF]/10 px-2 py-1 rounded-md">
-                        <Unlock className="w-3 h-3" /> Unlocked
-                      </span>
+                      <motion.div 
+                        whileHover={{ scale: 1.1 }}
+                        className="text-[10px] md:text-[11px] font-black italic text-brand-teal flex items-center gap-2 md:gap-4 bg-brand-teal/20 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl uppercase tracking-[0.3em] border border-brand-teal/30 shadow-2xl backdrop-blur-xl"
+                      >
+                        <Unlock className="w-3 h-3 md:w-4 md:h-4" /> Unlocked
+                      </motion.div>
                     ) : (
-                      <span className="text-xs font-bold text-yellow-500 flex items-center gap-1 bg-yellow-500/10 px-2 py-1 rounded-md">
-                        <Coins className="w-3 h-3" /> {mod.cost}
-                      </span>
+                      <motion.div 
+                        whileHover={{ scale: 1.1 }}
+                        className="text-[10px] md:text-[11px] font-black italic text-yellow-500 flex items-center gap-2 md:gap-4 bg-yellow-500/20 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl uppercase tracking-[0.3em] border border-yellow-500/30 shadow-2xl backdrop-blur-xl"
+                      >
+                        <Coins className="w-3 h-3 md:w-4 md:h-4" /> {mod.cost}
+                      </motion.div>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1 mb-3">{mod.desc}</p>
+                  <p className="text-base md:text-lg text-white/60 font-medium leading-relaxed mb-8 md:mb-10 max-w-3xl italic opacity-80">{mod.desc}</p>
                   
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-purple-400 bg-purple-400/10 px-2 py-1 rounded-md flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> {mod.stat}
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-4 md:gap-8">
+                    <motion.div 
+                      whileHover={{ scale: 1.05, x: 5 }}
+                      className="text-[10px] md:text-[11px] font-black italic text-brand-violet bg-brand-violet/20 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-4 uppercase tracking-[0.3em] border border-brand-violet/30 shadow-2xl backdrop-blur-xl"
+                    >
+                      <Zap className="w-3 h-3 md:w-4 md:h-4" /> {mod.stat}
+                    </motion.div>
                     
                     {!isUnlocked && (
-                      <button 
+                      <motion.button 
+                        whileHover={{ scale: 1.05, y: -6, boxShadow: '0 30px 60px rgba(0,245,160,0.4)' }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => handleUnlock(mod)}
                         disabled={!canAfford}
-                        className={`text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg flex items-center gap-1 transition-all ${canAfford ? 'bg-[#FF2A2A] text-white hover:bg-[#aa1111]' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                        className={`text-xs md:text-sm font-black italic uppercase tracking-[0.2em] md:tracking-[0.4em] px-6 py-4 md:px-12 md:py-6 rounded-full md:rounded-[2rem] flex items-center gap-3 md:gap-5 transition-all shadow-[0_20px_40px_rgba(0,0,0,0.4)] transform-gpu ${canAfford ? 'bg-gradient-to-br from-brand-teal to-brand-blue text-black font-black hover:brightness-110' : 'bg-white/5 text-white/20 cursor-not-allowed border border-white/10'}`}
                       >
-                        <Lock className="w-3 h-3" /> Unlock
-                      </button>
+                        <Lock className="w-4 h-4 md:w-5 md:h-5" /> Unlock Module
+                      </motion.button>
                     )}
                   </div>
 
                   {isUnlocked && (
-                    <div className="mt-4 pt-4 border-t border-white/10">
-                      <h5 className="text-xs text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Youtube className="w-3 h-3 text-red-500" /> Recommended Study
-                      </h5>
-                      <div className="space-y-2">
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-12 pt-12 border-t border-white/10 space-y-10"
+                    >
+                      <div className="flex items-center gap-5">
+                        <div className="p-3 bg-red-500/25 rounded-2xl border border-red-500/40 shadow-lg">
+                          <Youtube className="w-6 h-6 text-red-500" />
+                        </div>
+                        <h5 className="text-[12px] text-brand-teal font-black italic uppercase tracking-[0.6em]">Recommended Study</h5>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {mod.videos.map((vid, vIdx) => (
-                          <a
+                          <motion.a
                             key={vIdx}
                             href={vid.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block p-3 bg-[#0B0F19] border border-red-500/10 rounded-lg hover:border-red-500/40 transition-colors group"
-                            onClick={(e) => {
-                              if (!window.confirm(`Open "${vid.title}" in YouTube?`)) {
-                                e.preventDefault();
-                              }
-                            }}
+                            whileHover={{ y: -10, backgroundColor: 'rgba(255,255,255,0.08)', scale: 1.03, z: 30 }}
+                            className="block p-8 bg-black/50 border border-white/10 rounded-[2.5rem] transition-all group shadow-2xl backdrop-blur-2xl relative overflow-hidden transform-gpu"
+                            style={{ transformStyle: 'preserve-3d' }}
                           >
-                            <div className="flex justify-between items-start mb-1">
-                              <h6 className="font-bold text-sm text-white group-hover:text-red-400 transition-colors pr-2">{vid.title}</h6>
-                              <ExternalLink className="w-3 h-3 text-gray-500 shrink-0 group-hover:text-red-400" />
+                            <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                            
+                            <div className="flex justify-between items-start mb-4 md:mb-6 relative z-10" style={{ transform: 'translateZ(20px)' }}>
+                              <h6 className="font-black italic text-lg md:text-xl text-white/95 group-hover:text-brand-teal transition-colors pr-6 md:pr-10 leading-tight uppercase tracking-tighter">{vid.title}</h6>
+                              <div className="p-2 md:p-3 bg-white/10 rounded-xl group-hover:bg-brand-teal/30 transition-all shadow-lg shrink-0">
+                                <ExternalLink className="w-4 h-4 md:w-5 md:h-5 text-white/40 group-hover:text-brand-teal transition-colors" />
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-2 text-[10px] font-mono text-gray-400 mb-1">
-                              <span className="bg-[#1A2235] px-1.5 py-0.5 rounded">{vid.channel}</span>
-                              <span className="bg-[#1A2235] px-1.5 py-0.5 rounded">{vid.duration}</span>
+                            
+                            <div className="flex flex-wrap gap-4 text-[10px] font-black italic uppercase tracking-[0.3em] text-white/40 mb-6 relative z-10" style={{ transform: 'translateZ(15px)' }}>
+                              <span className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-sm">{vid.channel}</span>
+                              <span className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-sm">{vid.duration}</span>
                             </div>
-                            <p className="text-xs text-gray-400 italic">"{vid.why}"</p>
-                          </a>
+                            
+                            <p className="text-sm text-white/50 italic font-bold leading-relaxed group-hover:text-white/80 transition-colors relative z-10" style={{ transform: 'translateZ(10px)' }}>"{vid.why}"</p>
+                          </motion.a>
                         ))}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
                 </div>
               </div>

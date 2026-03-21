@@ -10,6 +10,8 @@ export interface StrengthLog {
   exercise: string;
   weight: number;
   reps: number;
+  rpe?: number;
+  formScore?: number;
 }
 
 export interface CampTask {
@@ -61,4 +63,11 @@ export interface UserProfile {
   dailyQuests?: { id: string; desc: string; completed: boolean; reward: number }[];
   unlockedModules?: string[];
   strengthLogs?: StrengthLog[];
+  trainingTrack?: 'mma' | 'snc' | 'hybrid';
+  power?: number;
+  hypertrophy?: number;
+  endurance?: number;
+  recovery?: number;
+  sncArchetype?: string;
+  prTracker?: { [exercise: string]: number };
 }

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VitasMMA</string>
+    <string name="title_activity_main">VitasMMA</string>
+    <string name="package_name">com.vitasmma.app</string>
+    <string name="custom_url_scheme">com.vitasmma.app</string>
+</resources>
