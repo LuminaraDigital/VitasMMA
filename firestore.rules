@@ -35,9 +35,12 @@ service cloud.firestore {
     //   - badges: list (optional)
     //   - isPro: boolean (optional)
     //   - coins: number (optional)
+    //   - aiCredits: number (optional)
     //   - dailyQuests: list (optional)
     //   - unlockedModules: list (optional)
     //   - strengthLogs: list (optional)
+    //   - tonAddress: string (optional)
+    //   - hasSeenTutorial: boolean (optional)
     //
     // ===============================================================
 
@@ -56,6 +59,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "luminaradigitalagency@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
     function uidUnchanged() {
       return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
     }
@@ -68,9 +77,38 @@ service cloud.firestore {
       return request.resource.data.keys().hasAll(fields);
     }
 
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isBillingFieldUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPro', 'aiCredits', 'coins', 'xp', 'level', 'unlockedModules']);
+    }
+
+    function hasDefaultBillingValues() {
+      let data = request.resource.data;
+      return (!('isPro' in data) || data.isPro == false) && 
+             (!('aiCredits' in data) || data.aiCredits == 100) && 
+             (!('coins' in data) || data.coins == 500) &&
+             (!('xp' in data) || data.xp == 100) &&
+             (!('level' in data) || data.level == 1) &&
+             (!('unlockedModules' in data) || data.unlockedModules == ['fundamentals']);
+    }
+
     function isValidUser(data) {
-      return hasRequiredFields(['baseStyle', 'stance', 'striking', 'grappling', 'clinch', 'archetype', 'xp', 'level', 'streak', 'activeDrills', 'analysisHistory', 'uid']) &&
+      let allowedFields = [
+        'uid', 'firstName', 'lastName', 'nickname', 'height', 'weight', 'gender',
+        'weightClass', 'targetWeightClass', 'competitionLevel', 'baseStyle', 'stance',
+        'striking', 'grappling', 'clinch', 'archetype', 'xp', 'level', 'streak',
+        'lastActiveDate', 'activeDrills', 'analysisHistory', 'activeCamp', 'badges',
+        'isPro', 'coins', 'aiCredits', 'dailyQuests', 'unlockedModules', 'strengthLogs', 'role', 'tonAddress', 'hasSeenTutorial',
+        'trainingTrack', 'power', 'hypertrophy', 'endurance', 'recovery', 'sncArchetype', 'prTracker', 'chatHistory', 'strategyHistory', 'lastCoinRegenDate'
+      ];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(['baseStyle', 'stance', 'striking', 'grappling', 'clinch', 'archetype', 'xp', 'level', 'streak', 'activeDrills', 'analysisHistory', 'uid']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             (!('tonAddress' in data) || (data.tonAddress is string && data.tonAddress.size() <= 128)) &&
+             (!('hasSeenTutorial' in data) || data.hasSeenTutorial is bool) &&
              data.baseStyle is string && data.baseStyle.size() < 100 &&
              data.stance is string && data.stance.size() < 50 &&
              data.striking is number && data.striking >= 0 && data.striking <= 100 &&
@@ -96,16 +134,53 @@ service cloud.firestore {
              (!('badges' in data) || (data.badges is list && data.badges.size() <= 1000)) &&
              (!('isPro' in data) || data.isPro is bool) &&
              (!('coins' in data) || (data.coins is number && data.coins >= 0)) &&
+             (!('aiCredits' in data) || (data.aiCredits is number && data.aiCredits >= 0)) &&
              (!('dailyQuests' in data) || (data.dailyQuests is list && data.dailyQuests.size() <= 50)) &&
              (!('unlockedModules' in data) || (data.unlockedModules is list && data.unlockedModules.size() <= 100)) &&
-             (!('strengthLogs' in data) || (data.strengthLogs is list && data.strengthLogs.size() <= 1000));
+             (!('strengthLogs' in data) || (data.strengthLogs is list && data.strengthLogs.size() <= 1000)) &&
+             (!('role' in data) || (data.role in ['admin', 'user'])) &&
+             (!('trainingTrack' in data) || (data.trainingTrack in ['mma', 'snc', 'hybrid'])) &&
+             (!('power' in data) || (data.power is number && data.power >= 0 && data.power <= 100)) &&
+             (!('hypertrophy' in data) || (data.hypertrophy is number && data.hypertrophy >= 0 && data.hypertrophy <= 100)) &&
+             (!('endurance' in data) || (data.endurance is number && data.endurance >= 0 && data.endurance <= 100)) &&
+             (!('recovery' in data) || (data.recovery is number && data.recovery >= 0 && data.recovery <= 100)) &&
+             (!('sncArchetype' in data) || (data.sncArchetype is string && data.sncArchetype.size() <= 100)) &&
+             (!('prTracker' in data) || data.prTracker is map) &&
+             (!('chatHistory' in data) || (data.chatHistory is list && data.chatHistory.size() <= 1000)) &&
+             (!('strategyHistory' in data) || (data.strategyHistory is list && data.strategyHistory.size() <= 1000)) &&
+             (!('lastCoinRegenDate' in data) || (data.lastCoinRegenDate is string && data.lastCoinRegenDate.size() <= 100));
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
-      allow update: if isOwner(userId) && isDocOwner() && isValidUser(request.resource.data) && uidNotModified();
-      allow delete: if isOwner(userId) && isDocOwner();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged() && hasDefaultBillingValues() && (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      allow update: if (isOwner(userId) && isDocOwner() && isValidUser(request.resource.data) && uidNotModified() && isBillingFieldUnchanged() && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
+      allow delete: if (isOwner(userId) && isDocOwner()) || isAdmin();
     }
+
+    // ===============================================================
+    // Devil's Advocate Attack Documentation
+    // ===============================================================
+    // 1. Public List Exploit: FAILED. No blanket 'allow read: if true' or 'allow list'.
+    // 2. Unauthorized Read/Write: FAILED. Access restricted to owner or admin.
+    // 3. The "Update Bypass": FAILED. 'update' rule calls 'isValidUser' and 'uidNotModified'.
+    // 4. Ownership Hijacking (Create): FAILED. 'uidUnchanged' ensures 'uid' matches 'auth.uid'.
+    // 5. Ownership Hijacking (Update): FAILED. 'uidNotModified' ensures 'uid' cannot be changed.
+    // 6. Immutable Field Modification: FAILED. 'uidNotModified' protects 'uid'.
+    // 7. Data Corruption (Type Juggling): FAILED. 'isValidUser' enforces types for all fields.
+    // 8. Resource Exhaustion / DoS: FAILED. '.size()' checks on all string and list fields.
+    // 9. Required Field Omission: FAILED. 'hasRequiredFields' ensures presence of mandatory fields.
+    // 10. Privilege Escalation: FAILED. 'create' and 'update' rules prevent users from setting or changing their 'role' to 'admin'.
+    // 11. Schema Pollution: FAILED. 'isValidUser' implicitly checks for known fields (though not strictly 'hasOnlyAllowedFields' yet, it covers all expected fields).
+    // 12. Invalid State Transition: N/A. No complex state transitions implemented yet.
+    // 13. Path Traversal / Scoping Attack: N/A. No path-based fields used yet.
+    // 14. Timestamp Manipulation: N/A. Using strings for dates currently, but with size limits.
+    // 15. Negative Value / Overflow: FAILED. 'isValidUser' checks for non-negative values where appropriate.
+    // 16. The "Mixed Content" Leak: FAILED. Read access is strictly owner or admin.
+    // 17. Counter/Action Replay: N/A. No counters implemented yet.
+    // 18. Orphaned Subcollection Access: N/A. No subcollections.
+    // 19. Query Mismatch: FAILED. App queries are scoped to the current user's document.
+    // 20. Validator Pattern Check: PASSED. Both 'create' and 'update' call 'isValidUser'.
+    // ===============================================================
   }
 }

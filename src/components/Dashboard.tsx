@@ -1,13 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Video, Mic, Flame, ChevronRight, Activity, Trophy, Medal, Crown, Coins, Zap, Check, Lock, Edit2, Dumbbell, Target, Brain, Swords } from 'lucide-react';
+import { Video, Mic, Flame, ChevronRight, Activity, Trophy, Medal, Crown, Coins, Zap, Check, Lock, Edit2, Dumbbell, Target, Brain, Swords, Plus, Wallet, BookOpen } from 'lucide-react';
 import { UserProfile } from '../types';
+import { AI_COSTS, LEVEL_XP_THRESHOLD, XP_REWARDS } from '../constants';
 import Logo from './Logo';
+import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
 import StrengthLayerDashboard from './StrengthLayerDashboard';
+import BuyCoinsModal from './BuyCoinsModal';
+import { fetchWithAuth } from '../utils/api';
 
-export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { profile: UserProfile, onNavigate: (v: string) => void, onUpdateProfile: (p: UserProfile) => void }) {
+export default function Dashboard({ profile, onNavigate, onUpdateProfile, onLogout }: { profile: UserProfile, onNavigate: (v: string) => void, onUpdateProfile: (p: UserProfile) => void, onLogout: () => void }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [activeTab, setActiveTab] = useState<'mma' | 'snc'>('mma');
+  const [showBuyCoins, setShowBuyCoins] = useState(false);
+  const userFriendlyAddress = useTonAddress();
+  const [tonBalance, setTonBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    if (profile.lastCoinRegenDate !== today) {
+      // Call server to add credits
+      fetchWithAuth('/api/add-credits', {
+        method: 'POST',
+        body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.DAILY_REGEN, source: 'daily_regen' })
+      }).then(res => {
+        onUpdateProfile({
+          ...profile,
+          lastCoinRegenDate: today
+        });
+      }).catch(console.error);
+    }
+  }, [profile.lastCoinRegenDate, profile.id, onUpdateProfile]);
+
+  useEffect(() => {
+    if (userFriendlyAddress) {
+      fetch(`https://tonapi.io/v2/accounts/${userFriendlyAddress}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.balance) {
+            setTonBalance((parseInt(data.balance) / 1e9).toFixed(2));
+          }
+        })
+        .catch(console.error);
+    } else {
+      setTonBalance(null);
+    }
+  }, [userFriendlyAddress]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -25,26 +63,22 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
     setTilt({ x: 0, y: 0 });
   };
 
-  const handleQuestClick = (questId: string) => {
+  const handleQuestClick = async (questId: string) => {
     if (!profile.dailyQuests) return;
     
     const quest = profile.dailyQuests.find(q => q.id === questId);
     if (!quest || quest.completed) return;
 
-    const updatedQuests = profile.dailyQuests.map(q => 
-      q.id === questId ? { ...q, completed: true } : q
-    );
-
-    const newXp = profile.xp + 250;
-    const newLevel = Math.floor(newXp / 1000) + 1;
-
-    onUpdateProfile({
-      ...profile,
-      coins: (profile.coins || 0) + quest.reward,
-      xp: newXp,
-      level: newLevel,
-      dailyQuests: updatedQuests
-    });
+    try {
+      await fetchWithAuth('/api/complete-quest', {
+        method: 'POST',
+        body: JSON.stringify({ userId: profile.id, questId })
+      });
+      
+      // The profile will be updated via the onSnapshot listener in App.tsx
+    } catch (err) {
+      console.error('Error completing quest:', err);
+    }
   };
 
   return (
@@ -67,67 +101,111 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
         />
       </div>
 
-      <header className="flex justify-between items-center mb-8 md:mb-10 sticky top-0 z-50 glass-dark p-4 md:p-5 -mx-4 md:-mx-6 px-4 md:px-6 rounded-b-[2rem] md:rounded-b-[3rem] border-b border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-3xl">
-        <div className="flex items-center gap-3 md:gap-5 cursor-pointer group" onClick={() => onNavigate('profile_settings')}>
+      <header className="flex justify-between items-center mb-6 md:mb-10 sticky top-0 z-50 glass-dark p-3 md:p-5 -mx-4 md:-mx-6 px-4 md:px-6 rounded-b-[2rem] md:rounded-b-[3rem] border-b border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-3xl">
+        <div className="flex items-center gap-2 md:gap-5 cursor-pointer group" onClick={() => onNavigate('profile_settings')}>
           <div className="relative">
             <motion.div 
               whileHover={{ scale: 1.15, rotate: 8 }}
               className="relative z-10"
             >
-              <div className="absolute inset-0 bg-brand-teal/30 rounded-full blur-xl md:blur-2xl group-hover:bg-brand-teal/50 transition-colors"></div>
-              <Logo className="w-12 h-12 md:w-16 md:h-16 relative z-10 drop-shadow-[0_0_15px_rgba(0,245,160,0.4)]" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 md:w-5 md:h-5 bg-brand-teal rounded-full border-4 border-brand-bg shadow-[0_0_20px_rgba(0,245,160,0.9)] z-20"></div>
+              <div className="absolute inset-0 bg-brand-teal/30 rounded-full blur-lg md:blur-2xl group-hover:bg-brand-teal/50 transition-colors"></div>
+              <Logo className="w-10 h-10 md:w-16 md:h-16 relative z-10 drop-shadow-[0_0_15px_rgba(0,245,160,0.4)]" />
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 md:w-5 md:h-5 bg-brand-teal rounded-full border-2 md:border-4 border-brand-bg shadow-[0_0_20px_rgba(0,245,160,0.9)] z-20"></div>
             </motion.div>
           </div>
-          <div>
-            <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter italic flex flex-col leading-none">
-              <span className="text-white/40 text-[8px] md:text-[10px] not-italic font-black tracking-[0.4em] block mb-1 md:mb-1.5 opacity-60">ELITE FIGHTER</span>
-              <div className="flex items-center gap-2">
-                <span className="truncate max-w-[100px] md:max-w-none">{profile.firstName || 'Fighter'}</span>
-                {profile.isPro && (
-                  <motion.div
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ repeat: Infinity, duration: 4 }}
+          <div className="min-w-0">
+            <h1 className="text-sm md:text-2xl font-black uppercase tracking-tighter italic flex flex-col leading-none">
+              <span className="text-white/40 text-[7px] md:text-[10px] not-italic font-black tracking-[0.4em] block mb-0.5 md:mb-1.5 opacity-60">ELITE FIGHTER</span>
+              <div className="flex items-center gap-1.5">
+                <span className="truncate max-w-[80px] md:max-w-none">{profile.firstName || 'Fighter'}</span>
+                {profile.isPro ? (
+                  <Crown className="w-3 h-3 md:w-5 md:h-5 text-brand-blue shrink-0" />
+                ) : (
+                  <motion.button 
+                    onClick={(e) => { e.stopPropagation(); onNavigate('pro_upgrade'); }}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="bg-brand-violet text-white text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] ml-1"
                   >
-                    <Crown className="w-4 h-4 md:w-5 md:h-5 text-brand-blue drop-shadow-[0_0_10px_rgba(0,217,245,0.6)]" />
-                  </motion.div>
+                    Upgrade
+                  </motion.button>
                 )}
               </div>
             </h1>
-            <div className="flex items-center gap-2 mt-1.5 md:mt-2">
-              <span className="px-1.5 md:px-2 py-0.5 bg-brand-teal/15 text-[8px] md:text-[9px] text-brand-teal font-black uppercase tracking-[0.2em] rounded-md border border-brand-teal/30 shadow-[0_0_10px_rgba(0,245,160,0.1)]">
-                {profile.archetype}
-              </span>
-              <div className="flex items-center gap-1 md:gap-1.5 bg-white/5 px-1.5 md:px-2 py-0.5 rounded-md border border-white/10">
-                <div className="w-1 h-1 bg-brand-blue rounded-full animate-pulse"></div>
-                <span className="text-[8px] md:text-[9px] text-white/50 font-black uppercase tracking-widest">LVL {profile.level}</span>
-              </div>
-            </div>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <motion.div 
-            whileHover={{ scale: 1.05, x: -6 }}
-            className="flex items-center gap-1.5 md:gap-2.5 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-white/10 shadow-2xl backdrop-blur-xl group cursor-default"
-          >
-            <Flame className="text-brand-teal w-3 h-3 md:w-4 md:h-4 group-hover:animate-bounce drop-shadow-[0_0_8px_rgba(0,245,160,0.5)]" />
-            <span className="font-black font-mono text-[10px] md:text-xs tracking-[0.1em] md:tracking-[0.15em] text-white/90">{profile.streak}D<span className="hidden sm:inline"> STREAK</span></span>
-          </motion.div>
-          <motion.div 
-            whileHover={{ scale: 1.05, x: -6 }}
-            className="flex items-center gap-1.5 md:gap-2.5 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-yellow-500/20 shadow-2xl backdrop-blur-xl group cursor-default"
-          >
-            <Coins className="text-yellow-500 w-3 h-3 md:w-4 md:h-4 group-hover:rotate-[20deg] transition-transform drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" />
-            <span className="font-black font-mono text-[10px] md:text-xs text-yellow-500 tracking-[0.1em] md:tracking-[0.15em]">{profile.coins || 0}</span>
-          </motion.div>
+        <div className="flex flex-col items-end gap-1.5 md:gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end">
+              <TonConnectButton className="scale-75 md:scale-100 origin-right" />
+            </div>
+            <button 
+              onClick={onLogout}
+              className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all active:scale-90"
+              title="Logout"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+          </div>
+          <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
+            {userFriendlyAddress && tonBalance !== null && (
+              <div className="flex items-center gap-1 bg-[#0098EA]/10 px-2 py-0.5 rounded-lg border border-[#0098EA]/20">
+                <Wallet className="w-2.5 h-2.5 text-[#0098EA]" />
+                <span className="font-mono text-[9px] text-[#0098EA] font-bold">{tonBalance}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
+              <Flame className="text-brand-teal w-2.5 h-2.5" />
+              <span className="font-black font-mono text-[9px] text-white/90">{profile.streak}D</span>
+            </div>
+            <motion.button 
+              onClick={() => setShowBuyCoins(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex items-center gap-2 bg-brand-violet/10 px-3 py-1.5 rounded-xl border border-brand-violet/30 hover:bg-brand-violet/20 transition-all"
+            >
+              <Brain className="text-brand-violet w-3.5 h-3.5 md:w-4 md:h-4" />
+              <div className="flex flex-col items-start leading-none">
+                <span className="text-[7px] md:text-[8px] font-black text-brand-violet/60 uppercase tracking-widest">V-COINS</span>
+                <span className="font-black font-mono text-xs md:text-sm text-brand-violet">{profile.aiCredits ?? 100}</span>
+              </div>
+              <Plus className="w-3 h-3 md:w-4 md:h-4 text-brand-violet ml-1" />
+            </motion.button>
+          </div>
         </div>
       </header>
+
+      {showBuyCoins && <BuyCoinsModal onClose={() => setShowBuyCoins(false)} userId={profile.id} isPro={profile.isPro} profile={profile} onUpdateProfile={onUpdateProfile} />}
+
+      {(profile.aiCredits || 0) < AI_COSTS.VIDEO_ANALYSIS && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-brand-violet/20 to-brand-blue/20 border border-brand-violet/30 rounded-2xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-brand-violet/20 flex items-center justify-center shrink-0">
+              <Flame className="w-5 h-5 text-brand-violet" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-sm md:text-base">🔥 Low V-Coins!</h3>
+              <p className="text-gray-400 text-xs md:text-sm">Top up to continue using AI analysis ({AI_COSTS.VIDEO_ANALYSIS} coins/analysis).</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowBuyCoins(true)}
+            className="w-full md:w-auto px-6 py-2 bg-brand-violet text-white font-bold rounded-xl hover:bg-brand-violet/80 transition-colors whitespace-nowrap text-sm"
+          >
+            Get V-Coins
+          </button>
+        </motion.div>
+      )}
 
       {activeTab === 'mma' ? (
         <>
           {/* DNA Card - Premium 3D */}
           <motion.div 
-            className="relative glass rounded-[2.5rem] md:rounded-[3.5rem] p-6 md:p-10 mb-12 md:mb-16 overflow-visible shadow-[0_20px_40px_rgba(0,0,0,0.5)] md:shadow-[0_40px_80px_rgba(0,0,0,0.5)] border border-white/15 group"
+            className="relative glass rounded-[2rem] md:rounded-[3.5rem] p-5 md:p-10 mb-8 md:mb-16 overflow-visible shadow-[0_20px_40px_rgba(0,0,0,0.5)] md:shadow-[0_40px_80px_rgba(0,0,0,0.5)] border border-white/15 group"
             style={{ transformStyle: 'preserve-3d', perspective: 1500 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
@@ -136,50 +214,50 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
             transition={{ type: 'spring', stiffness: 120, damping: 25 }}
           >
         {/* Animated Inner Glow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/15 via-transparent to-brand-violet/15 rounded-[2.5rem] md:rounded-[3.5rem] pointer-events-none group-hover:opacity-100 transition-opacity duration-700 opacity-60"></div>
-        <div className="absolute -inset-px bg-gradient-to-br from-white/25 via-transparent to-white/5 rounded-[2.5rem] md:rounded-[3.5rem] pointer-events-none opacity-40"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/15 via-transparent to-brand-violet/15 rounded-[2rem] md:rounded-[3.5rem] pointer-events-none group-hover:opacity-100 transition-opacity duration-700 opacity-60"></div>
+        <div className="absolute -inset-px bg-gradient-to-br from-white/25 via-transparent to-white/5 rounded-[2rem] md:rounded-[3.5rem] pointer-events-none opacity-40"></div>
         
         {/* Floating Background Icon */}
         <div className="absolute -right-8 md:-right-16 -top-8 md:-top-16 opacity-[0.04] pointer-events-none group-hover:opacity-[0.08] transition-all duration-1000 group-hover:scale-110 group-hover:rotate-12" style={{ transform: 'translateZ(-20px)' }}>
-          <Activity className="w-64 h-64 md:w-96 md:h-96 text-brand-teal" />
+          <Activity className="w-48 h-48 md:w-96 md:h-96 text-brand-teal" />
         </div>
         
-        <div className="flex justify-between items-start mb-10 md:mb-16 relative z-10 [transform:translateZ(40px)] md:[transform:translateZ(80px)]">
+        <div className="flex justify-between items-start mb-8 md:mb-16 relative z-10 [transform:translateZ(40px)] md:[transform:translateZ(80px)]">
           <div>
-            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-4">
               <motion.div 
                 animate={{ scale: [1, 1.3, 1] }}
                 transition={{ repeat: Infinity, duration: 2 }}
-                className="w-1.5 h-1.5 md:w-2 md:h-2 bg-brand-teal rounded-full shadow-[0_0_12px_rgba(0,245,160,1)]"
+                className="w-1 h-1 md:w-2 md:h-2 bg-brand-teal rounded-full shadow-[0_0_12px_rgba(0,245,160,1)]"
               ></motion.div>
-              <h2 className="text-[8px] md:text-[10px] text-brand-teal uppercase tracking-[0.4em] md:tracking-[0.6em] font-black drop-shadow-[0_0_12px_rgba(0,245,160,0.6)]">FIGHTER DNA</h2>
+              <h2 className="text-[7px] md:text-[10px] text-brand-teal uppercase tracking-[0.3em] md:tracking-[0.6em] font-black drop-shadow-[0_0_12px_rgba(0,245,160,0.6)]">FIGHTER DNA</h2>
             </div>
-            <p className="text-xl md:text-3xl font-black italic uppercase tracking-tighter leading-tight flex flex-wrap items-baseline gap-1.5 md:gap-2">
+            <p className="text-lg md:text-3xl font-black italic uppercase tracking-tighter leading-tight flex flex-wrap items-baseline gap-1 md:gap-2">
               <span className="text-white">{profile.baseStyle}</span>
-              <span className="text-brand-blue/30 text-base md:text-2xl">/</span>
-              <span className="text-white/80 text-lg md:text-2xl">{profile.stance}</span>
+              <span className="text-brand-blue/30 text-sm md:text-2xl">/</span>
+              <span className="text-white/80 text-base md:text-2xl">{profile.stance}</span>
             </p>
             {profile.weightClass && (
-              <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-4 md:mt-6">
-                <span className="text-[8px] md:text-[10px] text-white/60 uppercase tracking-[0.3em] md:tracking-[0.4em] font-black px-2 md:px-3 py-1 md:py-1.5 bg-white/5 rounded-lg md:rounded-xl border border-white/10 shadow-lg backdrop-blur-md">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-3 md:mt-6">
+                <span className="text-[7px] md:text-[10px] text-white/60 uppercase tracking-[0.2em] md:tracking-[0.4em] font-black px-1.5 md:px-3 py-0.5 md:py-1.5 bg-white/5 rounded-md md:rounded-xl border border-white/10 shadow-lg backdrop-blur-md">
                   {profile.weightClass}
                 </span>
-                <span className="text-[8px] md:text-[10px] text-white/60 uppercase tracking-[0.3em] md:tracking-[0.4em] font-black px-2 md:px-3 py-1 md:py-1.5 bg-white/5 rounded-lg md:rounded-xl border border-white/10 shadow-lg backdrop-blur-md">
+                <span className="text-[7px] md:text-[10px] text-white/60 uppercase tracking-[0.2em] md:tracking-[0.4em] font-black px-1.5 md:px-3 py-0.5 md:py-1.5 bg-white/5 rounded-md md:rounded-xl border border-white/10 shadow-lg backdrop-blur-md">
                   {profile.weight} LBS
                 </span>
               </div>
             )}
           </div>
           <div className="text-right">
-            <h2 className="text-[8px] md:text-[10px] text-brand-blue uppercase tracking-[0.4em] md:tracking-[0.6em] font-black mb-2 md:mb-4 drop-shadow-[0_0_12px_rgba(0,217,245,0.6)]">XP PROGRESS</h2>
-            <p className="text-xl md:text-3xl font-black font-mono text-brand-blue tracking-tighter leading-none">
-              {profile.xp} <span className="text-white/10 text-xs md:text-sm font-bold tracking-normal block md:inline mt-1 md:mt-0">/ {profile.level * 1000}</span>
+            <h2 className="text-[7px] md:text-[10px] text-brand-blue uppercase tracking-[0.3em] md:tracking-[0.6em] font-black mb-1 md:mb-4 drop-shadow-[0_0_12px_rgba(0,217,245,0.6)]">XP PROGRESS</h2>
+            <p className="text-lg md:text-3xl font-black font-mono text-brand-blue tracking-tighter leading-none">
+              {profile.xp} <span className="text-white/10 text-[10px] md:text-sm font-bold tracking-normal block md:inline mt-0.5 md:mt-0">/ {profile.level * LEVEL_XP_THRESHOLD}</span>
             </p>
           </div>
         </div>
         
         {/* Enhanced Progress Bar */}
-        <div className="h-3 md:h-4 bg-black/50 rounded-full overflow-hidden mb-10 md:mb-16 relative z-10 border border-white/10 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)] p-0.5 md:p-1" style={{ transform: 'translateZ(30px) md:translateZ(60px)' }}>
+        <div className="h-2 md:h-4 bg-black/50 rounded-full overflow-hidden mb-8 md:mb-16 relative z-10 border border-white/10 shadow-[inset_0_2px_10px_rgba(0,0,0,0.8)] p-0.5 md:p-1" style={{ transform: 'translateZ(30px) md:translateZ(60px)' }}>
           <motion.div 
             className="h-full rounded-full bg-gradient-to-r from-brand-teal via-brand-blue to-brand-violet relative"
             initial={{ width: 0 }}
@@ -192,7 +270,7 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
           </motion.div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 md:gap-10 relative z-10 [transform:translateZ(50px)] md:[transform:translateZ(100px)]">
+        <div className="grid grid-cols-3 gap-2 md:gap-10 relative z-10 [transform:translateZ(50px)] md:[transform:translateZ(100px)]">
           <StatCircle label="STRIKING" value={profile.striking} color="text-brand-teal" glowColor="rgba(0,245,160,0.5)" />
           <StatCircle label="GRAPPLING" value={profile.grappling} color="text-brand-blue" glowColor="rgba(0,217,245,0.5)" />
           <StatCircle label="CLINCH" value={profile.clinch} color="text-brand-violet" glowColor="rgba(168,85,247,0.5)" />
@@ -222,45 +300,69 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
           icon={<Trophy className="w-6 h-6 md:w-7 md:h-7 text-yellow-400" />} 
           title="Fight" 
           subtitle="Join the elite camp mode"
-          onClick={() => profile.isPro ? onNavigate('fight_camp') : onNavigate('pro_upgrade')}
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.CAMP_VERIFICATION) ? onNavigate('fight_camp') : setShowBuyCoins(true)}
           color="yellow"
           className="col-span-1 h-48 md:h-56"
-          isLocked={!profile.isPro}
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.CAMP_VERIFICATION}
+          cost={profile.isPro ? 0 : AI_COSTS.CAMP_VERIFICATION}
         />
         <ActionButton 
           icon={<Video className="w-6 h-6 md:w-7 md:h-7 text-brand-blue" />} 
           title="AI Video Analysis" 
           subtitle="Frame-by-frame technical breakdown"
-          onClick={() => profile.isPro ? onNavigate('video_analysis') : onNavigate('pro_upgrade')}
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.VIDEO_ANALYSIS) ? onNavigate('video_analysis') : setShowBuyCoins(true)}
           color="blue"
           className="col-span-2 h-32 md:h-36 flex-row items-center"
-          isLocked={!profile.isPro}
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.VIDEO_ANALYSIS}
+          cost={profile.isPro ? 0 : AI_COSTS.VIDEO_ANALYSIS}
         />
         <ActionButton 
           icon={<Target className="w-6 h-6 md:w-7 md:h-7 text-emerald-400" />} 
           title="Strength" 
           subtitle="Build the foundation"
-          onClick={() => onNavigate('strength_layer')}
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.STRENGTH_LAYER_LOG) ? onNavigate('strength_layer') : setShowBuyCoins(true)}
           color="emerald"
           className="col-span-1 h-40 md:h-48"
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.STRENGTH_LAYER_LOG}
+          cost={profile.isPro ? 0 : AI_COSTS.STRENGTH_LAYER_LOG}
         />
         <ActionButton 
           icon={<Mic className="w-6 h-6 md:w-7 md:h-7 text-brand-violet" />} 
           title="Live Coach" 
           subtitle="Real-time tactical feedback"
-          onClick={() => profile.isPro ? onNavigate('live_coach') : onNavigate('pro_upgrade')}
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.LIVE_COACH) ? onNavigate('live_coach') : setShowBuyCoins(true)}
           color="violet"
           className="col-span-1 h-40 md:h-48"
-          isLocked={!profile.isPro}
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.LIVE_COACH}
+          cost={profile.isPro ? 0 : AI_COSTS.LIVE_COACH}
         />
         <ActionButton 
           icon={<Brain className="w-6 h-6 md:w-7 md:h-7 text-indigo-400" />} 
           title="Strategy Advisor" 
           subtitle="AI-Powered fight intelligence"
-          onClick={() => profile.isPro ? onNavigate('strategy_advisor') : onNavigate('pro_upgrade')}
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.STRATEGY_ADVISOR) ? onNavigate('strategy_advisor') : setShowBuyCoins(true)}
           color="indigo"
           className="col-span-2 h-32 md:h-36 flex-row items-center"
-          isLocked={!profile.isPro}
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.STRATEGY_ADVISOR}
+          cost={profile.isPro ? 0 : AI_COSTS.STRATEGY_ADVISOR}
+        />
+        <ActionButton 
+          icon={<Brain className="w-6 h-6 md:w-7 md:h-7 text-brand-violet" />} 
+          title="V-Coins Store" 
+          subtitle="Top up your AI Credits"
+          onClick={() => setShowBuyCoins(true)}
+          color="violet"
+          className="col-span-1 h-40 md:h-48"
+        />
+        <ActionButton 
+          icon={<BookOpen className="w-6 h-6 md:w-7 md:h-7 text-brand-teal" />} 
+          title="Knowledge Base" 
+          subtitle="Manage your RAG library"
+          onClick={() => (profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.KNOWLEDGE_BASE_UPLOAD) ? onNavigate('knowledge_base') : setShowBuyCoins(true)}
+          color="teal"
+          className="col-span-2 h-32 md:h-36 flex-row items-center"
+          isLocked={!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.KNOWLEDGE_BASE_UPLOAD}
+          cost={profile.isPro ? 0 : AI_COSTS.KNOWLEDGE_BASE_UPLOAD}
         />
       </div>
 
@@ -304,12 +406,26 @@ export default function Dashboard({ profile, onNavigate, onUpdateProfile }: { pr
                 <span className={`text-xs md:text-lg tracking-tighter block leading-tight mb-1 md:mb-2 line-clamp-2 ${
                   q.completed ? 'text-white/40 line-through' : 'text-white font-black italic uppercase'
                 }`}>{q.desc}</span>
-                {!q.completed && (
-                  <div className="flex items-center gap-1.5 md:gap-2">
-                    <div className="w-1 h-1 bg-brand-teal rounded-full animate-ping shrink-0"></div>
-                    <span className="text-[8px] md:text-[10px] text-brand-teal font-black uppercase tracking-[0.2em] md:tracking-[0.3em] opacity-80 truncate">Active Objective</span>
+                
+                <div className="mt-2 md:mt-3">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      {!q.completed && <div className="w-1 h-1 bg-brand-teal rounded-full animate-ping shrink-0"></div>}
+                      <span className="text-[8px] md:text-[10px] text-brand-teal font-black uppercase tracking-[0.2em] md:tracking-[0.3em] opacity-80 truncate">
+                        {q.completed ? 'Objective Complete' : 'Active Objective'}
+                      </span>
+                    </div>
+                    <span className="text-[8px] md:text-[10px] text-white/70 font-black font-mono">{q.completed ? (q.target || 1) : (q.progress || 0)} / {q.target || 1}</span>
                   </div>
-                )}
+                  <div className="h-1.5 md:h-2 bg-black/50 rounded-full overflow-hidden border border-white/5 relative">
+                    <motion.div 
+                      className={`absolute top-0 left-0 h-full rounded-full ${q.completed ? 'bg-brand-teal' : 'bg-gradient-to-r from-brand-teal to-brand-blue'}`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (q.completed ? 1 : ((q.progress || 0) / (q.target || 1)))) * 100}%` }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <div className={`flex items-center gap-1.5 md:gap-2.5 font-black font-mono text-xs md:text-sm px-2 py-1.5 md:px-5 md:py-2.5 rounded-xl md:rounded-2xl border relative z-10 transition-all shrink-0 ${
@@ -379,7 +495,7 @@ function StatCircle({ label, value, color, glowColor }: { label: string, value: 
   );
 }
 
-function ActionButton({ icon, title, subtitle, onClick, color, className, isLocked }: any) {
+function ActionButton({ icon, title, subtitle, onClick, color, className, isLocked, cost }: any) {
   const colors: any = {
     teal: 'hover:border-brand-teal/50 hover:shadow-[0_0_40px_rgba(0,245,160,0.2)]',
     blue: 'hover:border-brand-blue/50 hover:shadow-[0_0_40px_rgba(0,217,245,0.2)]',
@@ -426,6 +542,13 @@ function ActionButton({ icon, title, subtitle, onClick, color, className, isLock
           {isLocked && <Lock className="w-3 h-3 md:w-4 md:h-4 text-brand-violet shrink-0" />}
         </h3>
         <p className="text-[8px] md:text-[10px] text-white/40 font-black uppercase tracking-[0.2em] leading-relaxed line-clamp-2 w-full pr-4">{subtitle}</p>
+        {cost && (
+          <div className="mt-2 flex items-center gap-1">
+            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-brand-violet bg-brand-violet/10 px-2 py-0.5 rounded-full border border-brand-violet/20">
+              {cost} V-Coins
+            </span>
+          </div>
+        )}
       </div>
       <div className="absolute top-4 right-4 md:top-8 md:right-8 opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all duration-500">
         <ChevronRight className={`w-4 h-4 md:w-6 md:h-6 ${color === 'teal' ? 'text-brand-teal' : 'text-white/40'}`} />

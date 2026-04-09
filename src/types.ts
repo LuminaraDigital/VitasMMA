@@ -19,6 +19,7 @@ export interface CampTask {
   title: string;
   description: string;
   type: 'drill' | 'conditioning' | 'recovery';
+  priority: 'High' | 'Medium' | 'Low';
   verificationCriteria: string;
   completed: boolean;
   xpReward: number;
@@ -30,11 +31,13 @@ export interface FightCamp {
   description: string;
   durationWeeks: number;
   currentDay: number;
+  startDate?: string; // ISO date string
   tasks: CampTask[];
   progress: number;
 }
 
 export interface UserProfile {
+  id?: string;
   firstName?: string;
   lastName?: string;
   nickname?: string;
@@ -54,13 +57,15 @@ export interface UserProfile {
   level: number;
   streak: number;
   lastActiveDate?: string;
+  lastCoinRegenDate?: string;
   activeDrills: Drill[];
   analysisHistory: string[];
   activeCamp?: FightCamp | null;
   badges?: string[];
   isPro?: boolean;
   coins?: number;
-  dailyQuests?: { id: string; desc: string; completed: boolean; reward: number }[];
+  aiCredits?: number;
+  dailyQuests?: { id: string; desc: string; completed: boolean; reward: number; progress?: number; target?: number }[];
   unlockedModules?: string[];
   strengthLogs?: StrengthLog[];
   trainingTrack?: 'mma' | 'snc' | 'hybrid';
@@ -70,4 +75,7 @@ export interface UserProfile {
   recovery?: number;
   sncArchetype?: string;
   prTracker?: { [exercise: string]: number };
+  chatHistory?: { role: 'user' | 'model', content: string }[];
+  strategyHistory?: { opponent: string, strategy: string, date: string }[];
+  hasSeenTutorial?: boolean;
 }

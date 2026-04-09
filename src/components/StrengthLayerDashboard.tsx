@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Dumbbell, Activity, Flame, Zap, ChevronRight, Lock, Target, Brain, Medal, Check, Coins, Video, X } from 'lucide-react';
 import { UserProfile } from '../types';
+import { LEVEL_XP_THRESHOLD, XP_REWARDS, QUEST_REWARDS, AI_COSTS } from '../constants';
 
 export default function StrengthLayerDashboard({ profile, onNavigate, onUpdateProfile }: { profile: UserProfile, onNavigate: (v: string) => void, onUpdateProfile: (p: UserProfile) => void }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
@@ -50,14 +51,47 @@ export default function StrengthLayerDashboard({ profile, onNavigate, onUpdatePr
   ];
 
   const sncQuests = [
-    { id: 'q1', desc: 'Log 3 sets of squats', completed: false, reward: 50 },
-    { id: 'q2', desc: 'Complete a mobility routine', completed: true, reward: 30 },
-    { id: 'q3', desc: 'Hit a new PR on Bench', completed: false, reward: 100 },
+    { id: 'q1', desc: 'Log 3 sets of squats', completed: false, reward: QUEST_REWARDS.STRENGTH_SESSION },
+    { id: 'q2', desc: 'Complete a mobility routine', completed: true, reward: QUEST_REWARDS.MOBILITY_SESSION },
+    { id: 'q3', desc: 'Hit a new PR on Bench', completed: false, reward: QUEST_REWARDS.NEW_PR },
   ];
 
-  const handleQuestClick = (id: string) => {
-    // Mock quest completion
+  const handleQuestClick = (questId: string) => {
+    // We use the profile's dailyQuests if available
+    if (!profile.dailyQuests) return;
+    
+    const quest = profile.dailyQuests.find(q => q.id === questId);
+    if (!quest || quest.completed) return;
+
+    const currentProgress = quest.progress || 0;
+    const target = quest.target || 1;
+    const newProgress = currentProgress + 1;
+    const isNowCompleted = newProgress >= target;
+
+    const updatedQuests = profile.dailyQuests.map(q => 
+      q.id === questId ? { ...q, progress: newProgress, completed: isNowCompleted } : q
+    );
+
+    if (isNowCompleted) {
+      const newXp = profile.xp + XP_REWARDS.DAILY_CHECK_IN;
+      const newLevel = Math.floor(newXp / LEVEL_XP_THRESHOLD) + 1;
+
+      onUpdateProfile({
+        ...profile,
+        coins: (profile.coins || 0) + quest.reward,
+        xp: newXp,
+        level: newLevel,
+        dailyQuests: updatedQuests
+      });
+    } else {
+      onUpdateProfile({
+        ...profile,
+        dailyQuests: updatedQuests
+      });
+    }
   };
+
+  const questsToDisplay = profile.dailyQuests || sncQuests;
 
   return (
     <div className="pb-24">
@@ -195,17 +229,17 @@ export default function StrengthLayerDashboard({ profile, onNavigate, onUpdatePr
             <div className="text-left flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-4 h-4 md:w-5 md:h-5 text-brand-blue animate-pulse shrink-0" />
-                <span className="text-[9px] md:text-xs font-black text-brand-blue uppercase tracking-[0.3em] truncate">Pro Feature</span>
+                <span className="text-[9px] md:text-xs font-black text-brand-blue uppercase tracking-[0.3em] truncate">AI Feature</span>
               </div>
               <h3 className="text-xl md:text-4xl font-black italic uppercase tracking-tighter mb-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-brand-blue transition-all line-clamp-2">
                 S&C Form Analyzer
               </h3>
               <p className="text-[9px] md:text-xs text-white/60 font-black uppercase tracking-widest max-w-[200px] md:max-w-[300px] line-clamp-2">
-                AI-powered bar path & depth tracking
+                AI-powered bar path & depth tracking • {profile.isPro ? 'FREE' : `${AI_COSTS.SNC_VIDEO_ANALYSIS} V-Coins`}
               </p>
             </div>
             <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-brand-blue/20 flex items-center justify-center border border-brand-blue/50 group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 shadow-[0_0_30px_rgba(0,195,255,0.3)] shrink-0">
-              {profile.isPro ? <Video className="w-5 h-5 md:w-8 md:h-8 text-brand-blue" /> : <Lock className="w-5 h-5 md:w-8 md:h-8 text-brand-blue" />}
+              {(profile.isPro || (profile.aiCredits || 0) >= AI_COSTS.SNC_VIDEO_ANALYSIS) ? <Video className="w-5 h-5 md:w-8 md:h-8 text-brand-blue" /> : <Lock className="w-5 h-5 md:w-8 md:h-8 text-brand-blue" />}
             </div>
           </div>
         </motion.button>
@@ -219,12 +253,12 @@ export default function StrengthLayerDashboard({ profile, onNavigate, onUpdatePr
             <p className="text-[10px] md:text-xs text-brand-blue font-black uppercase tracking-widest">Complete for XP & Coins</p>
           </div>
           <span className="text-xs md:text-sm font-black text-white/60 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-            {sncQuests.filter(q => q.completed).length}/{sncQuests.length}
+            {questsToDisplay.filter(q => q.completed).length}/{questsToDisplay.length}
           </span>
         </div>
 
         <div className="space-y-3 md:space-y-4">
-          {sncQuests.map((q, idx) => (
+          {questsToDisplay.map((q, idx) => (
             <motion.div
               key={q.id}
               initial={{ opacity: 0, x: -30 }}

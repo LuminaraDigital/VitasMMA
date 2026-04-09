@@ -1,14 +1,77 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Crown, Check, X, AlertCircle, Loader2 } from 'lucide-react';
+import { Crown, Check, X, AlertCircle, Loader2, Brain } from 'lucide-react';
+import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react';
+import { getUsdtTransaction, DESTINATION_ADDRESS } from '../utils/ton';
+import { fetchWithAuth } from '../utils/api';
+import { UserProfile } from '../types';
+import BuyCoinsModal from './BuyCoinsModal';
+import { SUBSCRIPTION_PRICES } from '../constants';
 
-export default function ProUpgrade({ onBack, onUpgrade, checkoutError }: { onBack: () => void, onUpgrade: () => void, checkoutError?: string | null }) {
+export default function ProUpgrade({ profile, onBack, onUpgrade, onTonUpgradeSuccess, checkoutError, onUpdateProfile }: { profile?: UserProfile, onBack: () => void, onUpgrade: () => void, onTonUpgradeSuccess: (boc: string) => void, checkoutError?: string | null, onUpdateProfile?: (p: UserProfile) => void }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isTonLoading, setIsTonLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'TON' | 'USDT'>('TON');
+  const [tonPrice, setTonPrice] = useState<number>(1.253);
+  const [showBuyCoins, setShowBuyCoins] = useState(false);
+  const [tonConnectUI] = useTonConnectUI();
+  const userFriendlyAddress = useTonAddress();
+
+  useEffect(() => {
+    const fetchTonPrice = async () => {
+      try {
+        const response = await fetch('/api/ton-price');
+        const data = await response.json();
+        if (data.price) {
+          setTonPrice(data.price);
+        }
+      } catch (error) {
+        console.error('Failed to fetch TON price:', error);
+      }
+    };
+    fetchTonPrice();
+  }, []);
 
   const handleUpgrade = async () => {
     setIsLoading(true);
     await onUpgrade();
     setIsLoading(false);
+  };
+
+  const handleTonPayment = async () => {
+    if (!userFriendlyAddress) {
+      tonConnectUI.openModal();
+      return;
+    }
+
+    setIsTonLoading(true);
+    try {
+      let transaction;
+      const usdtAmount = SUBSCRIPTION_PRICES.PRO_MONTHLY;
+      const tonAmount = (usdtAmount / tonPrice).toFixed(2);
+      const tonNanoAmount = Math.floor(parseFloat(tonAmount) * 1e9).toString();
+
+      if (paymentMethod === 'USDT') {
+        transaction = await getUsdtTransaction(userFriendlyAddress, usdtAmount);
+      } else {
+        transaction = {
+          validUntil: Math.floor(Date.now() / 1000) + 600,
+          messages: [
+            {
+              address: DESTINATION_ADDRESS, // User's TON Wallet Address
+              amount: tonNanoAmount,
+            }
+          ]
+        };
+      }
+
+      const result = await tonConnectUI.sendTransaction(transaction);
+      onTonUpgradeSuccess(result.boc);
+    } catch (e) {
+      console.error("TON Payment failed", e);
+    } finally {
+      setIsTonLoading(false);
+    }
   };
 
   return (
@@ -42,12 +105,12 @@ export default function ProUpgrade({ onBack, onUpgrade, checkoutError }: { onBac
         <p className="text-gray-400 text-center mb-8 text-sm">Unlock the ultimate AI fight coaching experience.</p>
 
         <div className="w-full space-y-3 mb-8">
-          <Feature text="Unlimited Gemini Vision Analysis" />
-          <Feature text="Advanced Fight IQ Breakdown" />
+          <Feature text="1,000 V-Coins Monthly Allowance" />
+          <Feature text="Advanced Fight IQ Breakdown (5 V-Coins)" />
           <Feature text="Pro Fighter Voice Packs (Khabib, GSP)" />
           <Feature text="Personalized Nutrition & Cut Plans" />
           <Feature text="Exclusive 'Champion' Profile Badge" />
-          <Feature text="10,000 V-Coins Sign-up Bonus" />
+          <Feature text="2,000 V-Coins Sign-up Bonus" />
         </div>
 
         {checkoutError && (
@@ -61,18 +124,83 @@ export default function ProUpgrade({ onBack, onUpgrade, checkoutError }: { onBac
           </div>
         )}
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleUpgrade}
-          disabled={isLoading}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#00E5FF] font-black text-lg uppercase tracking-widest shadow-[0_0_30px_rgba(255,42,42,0.4)] relative overflow-hidden group disabled:opacity-50"
-        >
-          <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
-          {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Upgrade Now - $14.99/mo'}
-        </motion.button>
+        <div className="w-full flex flex-col gap-3">
+          <div className="w-full bg-[#1A2235]/50 rounded-xl p-4 border border-white/5 mb-2">
+            <div className="flex justify-center gap-6 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="proUpgradePaymentMethod" 
+                  value="TON" 
+                  checked={paymentMethod === 'TON'} 
+                  onChange={() => setPaymentMethod('TON')}
+                  className="accent-[#0098EA]"
+                />
+                <span className={`text-sm font-bold ${paymentMethod === 'TON' ? 'text-[#0098EA]' : 'text-gray-400'}`}>TON</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="proUpgradePaymentMethod" 
+                  value="USDT" 
+                  checked={paymentMethod === 'USDT'} 
+                  onChange={() => setPaymentMethod('USDT')}
+                  className="accent-[#26A17B]"
+                />
+                <span className={`text-sm font-bold ${paymentMethod === 'USDT' ? 'text-[#26A17B]' : 'text-gray-400'}`}>USDT</span>
+              </label>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleTonPayment}
+              disabled={isTonLoading}
+              className={`w-full py-4 rounded-xl font-black text-lg uppercase tracking-widest relative overflow-hidden group disabled:opacity-50 ${paymentMethod === 'USDT' ? 'bg-[#26A17B] shadow-[0_0_30px_rgba(38,161,123,0.4)]' : 'bg-[#0098EA] shadow-[0_0_30px_rgba(0,152,234,0.4)]'}`}
+            >
+              <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
+              {isTonLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (userFriendlyAddress ? `Pay ${paymentMethod === 'USDT' ? `${SUBSCRIPTION_PRICES.PRO_MONTHLY} USDT` : `${(SUBSCRIPTION_PRICES.PRO_MONTHLY / tonPrice).toFixed(2)} TON`}` : 'Connect Wallet to Pay')}
+            </motion.button>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleUpgrade}
+            disabled={isLoading}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF2A2A] to-[#00E5FF] font-black text-lg uppercase tracking-widest shadow-[0_0_30px_rgba(255,42,42,0.4)] relative overflow-hidden group disabled:opacity-50"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></div>
+            {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `Pay with Card - $${SUBSCRIPTION_PRICES.PRO_MONTHLY}/mo`}
+          </motion.button>
+          
+          <div className="relative flex items-center py-2">
+            <div className="flex-grow border-t border-white/10"></div>
+            <span className="flex-shrink-0 mx-4 text-white/40 text-xs font-bold uppercase tracking-widest">OR</span>
+            <div className="flex-grow border-t border-white/10"></div>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowBuyCoins(true)}
+            className="w-full py-4 rounded-xl bg-[#1A2235] border border-brand-violet/30 text-brand-violet font-black text-lg uppercase tracking-widest relative overflow-hidden group flex items-center justify-center gap-2"
+          >
+            <Brain className="w-5 h-5" />
+            Buy V-Coins (AI Credits)
+          </motion.button>
+        </div>
         <p className="text-xs text-gray-500 mt-4 text-center">Cancel anytime. Billed monthly.</p>
       </div>
+      
+      {showBuyCoins && profile && (
+        <BuyCoinsModal 
+          onClose={() => setShowBuyCoins(false)} 
+          userId={profile.id} 
+          isPro={profile.isPro} 
+          profile={profile}
+          onUpdateProfile={onUpdateProfile}
+        />
+      )}
     </div>
   );
 }

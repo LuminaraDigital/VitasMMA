@@ -2,48 +2,53 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, Lock, Unlock, Zap, Coins, Shield, TrendingUp, Youtube, ExternalLink } from 'lucide-react';
 import { UserProfile } from '../types';
+import { MODULE_COSTS } from '../constants';
+import { fetchWithAuth } from '../utils/api';
 
 const MODULES = [
   { 
-    id: 'fundamentals', title: 'MMA Fundamentals', desc: 'Basic striking, footwork, and grappling defense.', cost: 0, icon: '🥊', stat: 'Striking +5',
+    id: 'fundamentals', title: 'MMA Fundamentals', desc: 'Stance, distance management, and basic positioning.', cost: MODULE_COSTS.FUNDAMENTALS, icon: '🥊', stat: 'Striking +5',
     videos: [
-      { title: 'MMA Footwork Fundamentals', channel: 'FightTips', duration: '8:15', why: 'Master the basic stance and movement', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'Basic Takedown Defense', channel: 'MMA On Point', duration: '10:30', why: 'Learn to sprawl and defend the double leg', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: 'MMA Cage Control & Ground and Pound', channel: 'MMA Shredded', duration: '15:45', why: 'Integrating striking with wrestling and cage pressure', url: 'https://youtu.be/W3O0x8O0x8O' },
+      { title: 'Stance, Distance & Footwork', channel: 'Georges St-Pierre', duration: '22:15', why: 'Master the ground floor of fighting with a legend', url: 'https://youtu.be/cP-E4YHSYQg' },
+      { title: 'BJJ Glossary & Positions', channel: 'Jiu-Jitsu Times', duration: '12:45', why: 'Learn the essential positions and terms', url: 'https://youtu.be/36Yv3f8LgsA' }
     ]
   },
   { 
-    id: 'advanced_striking', title: 'Advanced Striking', desc: 'Dutch kickboxing & Muay Thai elbows.', cost: 300, icon: '⚡', stat: 'Striking +10',
+    id: 'advanced_striking', title: 'Advanced Striking', desc: 'Elite combinations, counters, and MMA boxing.', cost: MODULE_COSTS.ADVANCED_STRIKING, icon: '⚡', stat: 'Striking +10',
     videos: [
-      { title: 'Dutch Kickboxing Combos', channel: 'Jeff Chan', duration: '12:45', why: 'Integrate heavy low kicks into your boxing', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'Muay Thai Elbow Setups', channel: 'FightTips', duration: '9:20', why: 'Learn to close the distance for devastating elbows', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: 'Kickboxing Fundamentals & Combinations', channel: 'Gabriel Varga', duration: '18:20', why: 'Core striking mechanics and high-percentage combos', url: 'https://youtu.be/Yp_O6Z-C6vE' },
+      { title: 'MMA Striking Combinations', channel: 'Anderson Silva', duration: '1:05:20', why: 'Elite flow between strikes and counters', url: 'https://youtu.be/nxKukVoomL0' },
+      { title: '4-Round Kickboxing Workout', channel: 'FightCamp', duration: '21:10', why: 'High-intensity follow-along striking drill', url: 'https://youtu.be/bs7X3F-XYTc' }
     ]
   },
   { 
-    id: 'wrestling_chain', title: 'Chain Wrestling', desc: 'Seamless takedown transitions and top control.', cost: 500, icon: '🤼', stat: 'Grappling +10',
+    id: 'wrestling_chain', title: 'Wrestling & Smesh', desc: 'Takedown mechanics and heavy top pressure.', cost: MODULE_COSTS.WRESTLING_CHAIN, icon: '🤼', stat: 'Grappling +10',
     videos: [
-      { title: 'Chain Wrestling Drills', channel: 'Jordan Burroughs', duration: '15:00', why: 'Transition smoothly between single and double legs', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'MMA Top Control Secrets', channel: 'BJJ Fanatics', duration: '11:10', why: 'Maintain heavy pressure to land ground and pound', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: 'Takedown Mechanics & Decoys', channel: 'Georges St-Pierre', duration: '15:00', why: 'The art of the level change and connection', url: 'https://youtu.be/EkhvG6nFDUU' },
+      { title: 'The GSP Takedown System', channel: 'MMA Shredded', duration: '11:10', why: 'Integrating shots with your striking game', url: 'https://youtu.be/04axE4WidO8' },
+      { title: 'Khabib Smesh Philosophy', channel: 'Khabib Nurmagomedov', duration: '08:30', why: 'Using legs and hips for ultimate control', url: 'https://youtu.be/x_IrC_-zzYU' }
     ]
   },
   { 
-    id: 'submission_escapes', title: 'Submission Escapes', desc: 'Late-stage defense mechanics and sweeps.', cost: 800, icon: '🐍', stat: 'Grappling +15',
+    id: 'submission_escapes', title: 'Survival & Escapes', desc: 'Mount escapes, survival mindset, and self-defense.', cost: MODULE_COSTS.SUBMISSION_ESCAPES, icon: '🐍', stat: 'Grappling +15',
     videos: [
-      { title: 'Late Stage Guillotine Defense', channel: 'BJJ Scout', duration: '7:50', why: 'Survive deep chokes and reverse the position', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'Escaping the Mount in MMA', channel: 'Jeff Chan', duration: '14:20', why: 'Avoid damage and get back to your feet safely', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: '3 Essential Mount Escapes', channel: 'Brandon Mccaghren', duration: '07:50', why: 'Regain guard and transition to safety', url: 'https://youtu.be/SYel-mVSMAI' },
+      { title: 'White Belt Survival Guide', channel: 'Chewjitsu', duration: '14:20', why: 'Prioritize control and survival over offense', url: 'https://youtu.be/khd9tFAyIyQ' },
+      { title: 'BJJ Self-Defense Fundamentals', channel: 'Gracie Breakdown', duration: '1:45:30', why: 'Neutralize power with distance management', url: 'https://youtu.be/bErptxD1jho' }
     ]
   },
   { 
-    id: 'clinch_mastery', title: 'Thai Clinch Mastery', desc: 'Plum control, knees, and sweeps.', cost: 1200, icon: '🌪️', stat: 'Clinch +15',
+    id: 'clinch_mastery', title: 'Thai Clinch Mastery', desc: 'Plum control, knees, and off-balancing.', cost: MODULE_COSTS.CLINCH_MASTERY, icon: '🌪️', stat: 'Clinch +15',
     videos: [
-      { title: 'Thai Plum Fundamentals', channel: 'FightTips', duration: '10:05', why: 'Control your opponent\'s posture for knees', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'Clinch Sweeps and Dumps', channel: 'MMAShredded', duration: '8:40', why: 'Off-balance your opponent from the inside', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: 'Muay Thai Clinch Fundamentals', channel: 'Anderson Silva', duration: '1:02:05', why: 'Plum control and devastating knee attacks', url: 'https://youtu.be/rYmDwDnjXCE' }
     ]
   },
   { 
-    id: 'champ_mentality', title: 'Championship Rounds', desc: 'Cardio management and mental fortitude.', cost: 2000, icon: '👑', stat: 'All Stats +5',
+    id: 'champ_mentality', title: 'Submission Finishing', desc: 'High-percentage finishes and finishing mechanics.', cost: MODULE_COSTS.CHAMP_MENTALITY, icon: '👑', stat: 'All Stats +5',
     videos: [
-      { title: 'Pacing for 5 Round Fights', channel: 'MMA On Point', duration: '13:15', why: 'Learn how to manage your gas tank', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
-      { title: 'Mental Toughness in the Cage', channel: 'Phil Daru Strong', duration: '16:30', why: 'Push through exhaustion when it matters most', url: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }
+      { title: '10 High-Percentage Submissions', channel: 'BJJ Fanatics', duration: '13:15', why: 'Master the Arm Bar, Americana, Kimura, and essential chokes', url: 'https://youtu.be/ALEeReC3u5Y' },
+      { title: '3 Essential Submissions', channel: 'Brandon Mccaghren', duration: '16:30', why: 'Proper mechanics for RNC, Armbar, and Triangle', url: 'https://youtu.be/PzRARzgBBNo' }
     ]
   },
 ];
@@ -51,13 +56,22 @@ const MODULES = [
 export default function TrainingHub({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
   const unlocked = profile.unlockedModules || ['fundamentals'];
 
-  const handleUnlock = (mod: typeof MODULES[0]) => {
-    if ((profile.coins || 0) >= mod.cost && !unlocked.includes(mod.id)) {
-      onUpdateProfile({
-        ...profile,
-        coins: (profile.coins || 0) - mod.cost,
-        unlockedModules: [...unlocked, mod.id]
-      });
+  const handleUnlock = async (mod: typeof MODULES[0]) => {
+    if ((profile.isPro || (profile.coins || 0) >= mod.cost) && !unlocked.includes(mod.id)) {
+      try {
+        const response = await fetchWithAuth('/api/unlock-module', {
+          method: 'POST',
+          body: JSON.stringify({ userId: profile.id, moduleId: mod.id, cost: mod.cost })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to unlock module');
+        }
+        
+        // The profile will be updated via the onSnapshot listener in App.tsx
+      } catch (err) {
+        console.error('Error unlocking module:', err);
+      }
     }
   };
 
@@ -226,7 +240,7 @@ export default function TrainingHub({ profile, onUpdateProfile, onBack }: { prof
                         whileHover={{ scale: 1.1 }}
                         className="text-[10px] md:text-[11px] font-black italic text-yellow-500 flex items-center gap-2 md:gap-4 bg-yellow-500/20 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl uppercase tracking-[0.3em] border border-yellow-500/30 shadow-2xl backdrop-blur-xl"
                       >
-                        <Coins className="w-3 h-3 md:w-4 md:h-4" /> {mod.cost}
+                        <Coins className="w-3 h-3 md:w-4 md:h-4" /> {profile.isPro ? 'FREE' : mod.cost}
                       </motion.div>
                     )}
                   </div>

@@ -26,6 +26,15 @@ export function getAIContext(profile: UserProfile): string {
     });
   }
 
+  if (profile.strategyHistory && profile.strategyHistory.length > 0) {
+    const recentStrategies = profile.strategyHistory.slice(-3);
+    context += `\nPAST FIGHT STRATEGIES (Use this to understand their tactical approach against different opponents):\n`;
+    recentStrategies.forEach((strat, i) => {
+      const truncated = strat.strategy.length > 500 ? strat.strategy.substring(0, 500) + '...' : strat.strategy;
+      context += `--- vs ${strat.opponent} (${strat.date.split('T')[0]}) ---\n${truncated}\n`;
+    });
+  }
+
   if (profile.activeDrills && profile.activeDrills.length > 0) {
     const drills = profile.activeDrills.filter(d => !d.completed).map(d => d.title).join(', ');
     if (drills) {

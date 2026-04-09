@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Trophy, CheckCircle2, Circle, Play, ShieldAlert, Zap, Activity, Calendar } from 'lucide-react';
 import { UserProfile, FightCamp as FightCampType, CampTask } from '../types';
+import { CAMP_XP_REWARDS } from '../constants';
 
 const AVAILABLE_CAMPS: FightCampType[] = [
   {
@@ -12,11 +13,11 @@ const AVAILABLE_CAMPS: FightCampType[] = [
     currentDay: 1,
     progress: 0,
     tasks: [
-      { id: 't1', title: 'Jab Cross Mechanics', description: 'Throw 50 reps of 1-2 combos', type: 'drill', verificationCriteria: 'Confirm 50+ punches thrown. Check if rear heel is planted on the cross and hands return to guard.', completed: false, xpReward: 150 },
-      { id: 't2', title: 'Shadowboxing Flow', description: '3 minutes continuous movement', type: 'conditioning', verificationCriteria: 'Confirm continuous movement for at least 60 seconds in the clip. Check head movement and footwork.', completed: false, xpReward: 100 },
-      { id: 't3', title: 'Active Recovery', description: '10 mins stretching', type: 'recovery', verificationCriteria: 'Confirm user is performing static or dynamic stretches.', completed: false, xpReward: 50 },
-      { id: 't4', title: 'Lead Hook Pivot', description: '25 reps of lead hook with pivot', type: 'drill', verificationCriteria: 'Confirm 25+ lead hooks thrown. Check if lead foot pivots correctly and weight transfers.', completed: false, xpReward: 150 },
-      { id: 't5', title: 'Jump Rope', description: '5 minutes of jump rope', type: 'conditioning', verificationCriteria: 'Confirm continuous jump rope for at least 60 seconds in the clip.', completed: false, xpReward: 100 }
+      { id: 't1', title: 'Jab Cross Mechanics', description: 'Throw 50 reps of 1-2 combos', type: 'drill', priority: 'High', verificationCriteria: 'Confirm 50+ punches thrown. Check if rear heel is planted on the cross and hands return to guard.', completed: false, xpReward: CAMP_XP_REWARDS.DRILL_HIGH },
+      { id: 't2', title: 'Shadowboxing Flow', description: '3 minutes continuous movement', type: 'conditioning', priority: 'Medium', verificationCriteria: 'Confirm continuous movement for at least 60 seconds in the clip. Check head movement and footwork.', completed: false, xpReward: CAMP_XP_REWARDS.CONDITIONING_MEDIUM },
+      { id: 't3', title: 'Active Recovery', description: '10 mins stretching', type: 'recovery', priority: 'Low', verificationCriteria: 'Confirm user is performing static or dynamic stretches.', completed: false, xpReward: CAMP_XP_REWARDS.RECOVERY_LOW },
+      { id: 't4', title: 'Lead Hook Pivot', description: '25 reps of lead hook with pivot', type: 'drill', priority: 'High', verificationCriteria: 'Confirm 25+ lead hooks thrown. Check if lead foot pivots correctly and weight transfers.', completed: false, xpReward: CAMP_XP_REWARDS.DRILL_HIGH },
+      { id: 't5', title: 'Jump Rope', description: '5 minutes of jump rope', type: 'conditioning', priority: 'Medium', verificationCriteria: 'Confirm continuous jump rope for at least 60 seconds in the clip.', completed: false, xpReward: CAMP_XP_REWARDS.CONDITIONING_MEDIUM }
     ]
   },
   {
@@ -27,8 +28,8 @@ const AVAILABLE_CAMPS: FightCampType[] = [
     currentDay: 1,
     progress: 0,
     tasks: [
-      { id: 't6', title: 'Heavy Bag Sprints', description: '5 rounds of 3 mins on the bag', type: 'conditioning', verificationCriteria: 'Confirm high intensity striking on a heavy bag. Check for power and volume.', completed: false, xpReward: 200 },
-      { id: 't7', title: 'Sprawl & Brawl', description: '20 sprawls into 1-2 combos', type: 'drill', verificationCriteria: 'Confirm user is sprawling and immediately throwing a 1-2 combo upon standing.', completed: false, xpReward: 150 },
+      { id: 't6', title: 'Heavy Bag Sprints', description: '5 rounds of 3 mins on the bag', type: 'conditioning', priority: 'High', verificationCriteria: 'Confirm high intensity striking on a heavy bag. Check for power and volume.', completed: false, xpReward: CAMP_XP_REWARDS.CONDITIONING_HIGH },
+      { id: 't7', title: 'Sprawl & Brawl', description: '20 sprawls into 1-2 combos', type: 'drill', priority: 'High', verificationCriteria: 'Confirm user is sprawling and immediately throwing a 1-2 combo upon standing.', completed: false, xpReward: CAMP_XP_REWARDS.DRILL_HIGH },
     ]
   }
 ];
@@ -38,13 +39,28 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
 
   useEffect(() => {
+    if (selectedCamp?.startDate) {
+      const start = new Date(selectedCamp.startDate);
+      const now = new Date();
+      const diffTime = now.getTime() - start.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      if (diffDays !== selectedCamp.currentDay && diffDays > 0) {
+        const updatedCamp = { ...selectedCamp, currentDay: diffDays };
+        setSelectedCamp(updatedCamp);
+        onUpdateProfile({ ...profile, activeCamp: updatedCamp });
+      }
+    }
+  }, [selectedCamp?.startDate, profile, onUpdateProfile]);
+
+  useEffect(() => {
     if (selectedCamp && (!selectedCamp.tasks || selectedCamp.tasks.length === 0)) {
       const defaultTasks: CampTask[] = [
-        { id: 't1', title: 'Jab Cross Mechanics', description: 'Throw 50 reps of 1-2 combos', type: 'drill', verificationCriteria: 'Confirm 50+ punches thrown. Check if rear heel is planted on the cross and hands return to guard.', completed: false, xpReward: 150 },
-        { id: 't2', title: 'Shadowboxing Flow', description: '3 minutes continuous movement', type: 'conditioning', verificationCriteria: 'Confirm continuous movement for at least 60 seconds in the clip. Check head movement and footwork.', completed: false, xpReward: 100 },
-        { id: 't3', title: 'Active Recovery', description: '10 mins stretching', type: 'recovery', verificationCriteria: 'Confirm user is performing static or dynamic stretches.', completed: false, xpReward: 50 },
-        { id: 't4', title: 'Lead Hook Pivot', description: '25 reps of lead hook with pivot', type: 'drill', verificationCriteria: 'Confirm 25+ lead hooks thrown. Check if lead foot pivots correctly and weight transfers.', completed: false, xpReward: 150 },
-        { id: 't5', title: 'Jump Rope', description: '5 minutes of jump rope', type: 'conditioning', verificationCriteria: 'Confirm continuous jump rope for at least 60 seconds in the clip.', completed: false, xpReward: 100 }
+        { id: 't1', title: 'Jab Cross Mechanics', description: 'Throw 50 reps of 1-2 combos', type: 'drill', priority: 'High', verificationCriteria: 'Confirm 50+ punches thrown. Check if rear heel is planted on the cross and hands return to guard.', completed: false, xpReward: CAMP_XP_REWARDS.DRILL_HIGH },
+        { id: 't2', title: 'Shadowboxing Flow', description: '3 minutes continuous movement', type: 'conditioning', priority: 'Medium', verificationCriteria: 'Confirm continuous movement for at least 60 seconds in the clip. Check head movement and footwork.', completed: false, xpReward: CAMP_XP_REWARDS.CONDITIONING_MEDIUM },
+        { id: 't3', title: 'Active Recovery', description: '10 mins stretching', type: 'recovery', priority: 'Low', verificationCriteria: 'Confirm user is performing static or dynamic stretches.', completed: false, xpReward: CAMP_XP_REWARDS.RECOVERY_LOW },
+        { id: 't4', title: 'Lead Hook Pivot', description: '25 reps of lead hook with pivot', type: 'drill', priority: 'High', verificationCriteria: 'Confirm 25+ lead hooks thrown. Check if lead foot pivots correctly and weight transfers.', completed: false, xpReward: CAMP_XP_REWARDS.DRILL_HIGH },
+        { id: 't5', title: 'Jump Rope', description: '5 minutes of jump rope', type: 'conditioning', priority: 'Medium', verificationCriteria: 'Confirm continuous jump rope for at least 60 seconds in the clip.', completed: false, xpReward: CAMP_XP_REWARDS.CONDITIONING_MEDIUM }
       ];
       
       const updatedCamp = { ...selectedCamp, tasks: defaultTasks };
@@ -54,9 +70,10 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
   }, [selectedCamp, profile, onUpdateProfile]);
 
   const handleJoinCamp = (camp: FightCampType) => {
-    const newProfile = { ...profile, activeCamp: camp };
+    const updatedCamp = { ...camp, startDate: new Date().toISOString() };
+    const newProfile = { ...profile, activeCamp: updatedCamp };
     onUpdateProfile(newProfile);
-    setSelectedCamp(camp);
+    setSelectedCamp(updatedCamp);
   };
 
   const handleCompleteDay = () => {
@@ -83,6 +100,24 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
 
   const handleQuitCamp = () => {
     setShowQuitConfirm(true);
+  };
+
+  const handleTogglePriority = (taskId: string) => {
+    if (!selectedCamp) return;
+    
+    const priorities: ('High' | 'Medium' | 'Low')[] = ['Low', 'Medium', 'High'];
+    const updatedTasks = selectedCamp.tasks.map(t => {
+      if (t.id === taskId) {
+        const currentIndex = priorities.indexOf(t.priority);
+        const nextIndex = (currentIndex + 1) % priorities.length;
+        return { ...t, priority: priorities[nextIndex] };
+      }
+      return t;
+    });
+
+    const updatedCamp = { ...selectedCamp, tasks: updatedTasks };
+    setSelectedCamp(updatedCamp);
+    onUpdateProfile({ ...profile, activeCamp: updatedCamp });
   };
 
   const confirmQuitCamp = () => {
@@ -163,6 +198,13 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
   }
 
   const allTasksCompleted = selectedCamp.tasks.every(t => t.completed);
+  const completedTasksCount = selectedCamp.tasks.filter(t => t.completed).length;
+  const totalTasksCount = selectedCamp.tasks.length;
+  const dailyProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+  
+  const totalDays = selectedCamp.durationWeeks * 7;
+  const completedDays = selectedCamp.currentDay - 1;
+  const overallProgress = Math.round(((completedDays + (totalTasksCount > 0 ? completedTasksCount / totalTasksCount : 0)) / totalDays) * 100);
 
   return (
     <div className="h-full flex flex-col bg-brand-bg text-white overflow-hidden relative font-sans">
@@ -204,14 +246,14 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
               <h2 className="text-[10px] font-black italic uppercase tracking-[0.4em] text-brand-teal mb-1">Camp Progress</h2>
               <span className="text-[8px] font-black italic uppercase tracking-[0.2em] text-gray-400">Day {selectedCamp.currentDay} of {selectedCamp.durationWeeks * 7}</span>
             </div>
-            <span className="text-2xl font-black italic uppercase tracking-tighter text-gradient">{selectedCamp.progress}%</span>
+            <span className="text-2xl font-black italic uppercase tracking-tighter text-gradient">{overallProgress}%</span>
           </div>
           <div className="space-y-4 relative z-10">
             <div className="h-3 bg-black/60 rounded-full overflow-hidden border border-white/5 shadow-inner">
               <motion.div 
                 className="h-full bg-gradient-to-r from-brand-teal via-brand-blue to-brand-violet relative"
                 initial={{ width: 0 }}
-                animate={{ width: `${selectedCamp.progress}%` }}
+                animate={{ width: `${overallProgress}%` }}
                 transition={{ duration: 2, ease: "circOut" }}
               >
                 <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
@@ -243,9 +285,19 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
           </div>
         </motion.div>
 
-        <div className="flex items-center justify-between mb-6 px-2">
-          <h3 className="text-[10px] font-black italic uppercase tracking-[0.5em] text-white/40">Today's Tasks</h3>
-          <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent ml-6"></div>
+        <div className="mb-6 px-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[10px] font-black italic uppercase tracking-[0.5em] text-white/40">Today's Tasks</h3>
+            <span className="text-[10px] font-black italic uppercase tracking-widest text-brand-teal">{completedTasksCount}/{totalTasksCount} Completed</span>
+          </div>
+          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden shadow-inner">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-brand-teal to-brand-blue"
+              initial={{ width: 0 }}
+              animate={{ width: `${dailyProgress}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            />
+          </div>
         </div>
         
         <div className="space-y-4 md:space-y-6 mb-8 md:mb-12">
@@ -261,14 +313,51 @@ export default function FightCamp({ profile, onUpdateProfile, onBack, onVerifyTa
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 mb-4 md:mb-6">
                 <div className="flex items-center gap-3 md:gap-5">
                   <div className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center border transition-all duration-500 shadow-lg shrink-0 ${task.completed ? 'bg-brand-teal/20 border-brand-teal/40' : 'bg-black/40 border-white/10'}`}>
-                    {task.completed ? (
-                      <CheckCircle2 className="w-5 h-5 md:w-8 md:h-8 text-brand-teal drop-shadow-[0_0_8px_rgba(0,245,160,0.5)]" />
-                    ) : (
-                      <Circle className="w-5 h-5 md:w-8 md:h-8 text-gray-700" />
-                    )}
+                    <AnimatePresence mode="wait">
+                      {task.completed ? (
+                        <motion.div
+                          key="completed"
+                          initial={{ scale: 0, opacity: 0, rotate: -180 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          exit={{ scale: 0, opacity: 0, rotate: 180 }}
+                          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                        >
+                          <CheckCircle2 className="w-5 h-5 md:w-8 md:h-8 text-brand-teal drop-shadow-[0_0_8px_rgba(0,245,160,0.5)]" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="incomplete"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <Circle className="w-5 h-5 md:w-8 md:h-8 text-gray-700" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                   <div>
-                    <h4 className={`text-base md:text-xl font-black italic uppercase tracking-tighter transition-colors leading-tight ${task.completed ? 'text-white' : 'text-gray-300'}`}>{task.title}</h4>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className={`text-base md:text-xl font-black italic uppercase tracking-tighter transition-colors leading-tight ${task.completed ? 'text-white' : 'text-gray-300'}`}>{task.title}</h4>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTogglePriority(task.id);
+                        }}
+                        className={`text-[7px] md:text-[9px] font-black italic uppercase tracking-widest px-1.5 md:px-2 py-0.5 md:py-1 rounded border transition-colors ${
+                          task.priority === 'High' 
+                            ? 'bg-red-500/20 text-red-400 border-red-500/30' 
+                            : task.priority === 'Medium'
+                              ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                              : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                        }`}
+                      >
+                        {task.priority}
+                      </motion.button>
+                    </div>
                     <p className="text-[10px] md:text-xs text-gray-500 font-bold mt-1">{task.description}</p>
                   </div>
                 </div>

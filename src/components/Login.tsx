@@ -1,20 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Loader2, Zap, XCircle, Send } from 'lucide-react';
-import { signInWithPopup, signInAnonymously } from 'firebase/auth';
+import { Mail, Loader2, XCircle, Send, Wallet } from 'lucide-react';
+import { signInWithPopup, signInWithCustomToken } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
+import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react';
+import { useEffect } from 'react';
 import Logo from './Logo';
 
-export default function Login({ onLoginSuccess, onDemoLogin }: { onLoginSuccess: (token: string) => void, onDemoLogin: () => void }) {
+export default function Login({ onLoginSuccess }: { onLoginSuccess: (token: string) => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isTelegram, setIsTelegram] = useState(false);
-
-  useEffect(() => {
-    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      setIsTelegram(true);
-    }
-  }, []);
+  const [tonConnectUI] = useTonConnectUI();
+  const tonAddress = useTonAddress();
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -30,19 +27,73 @@ export default function Login({ onLoginSuccess, onDemoLogin }: { onLoginSuccess:
   };
 
   const handleTelegramLogin = async () => {
+    if (!window.Telegram?.WebApp?.initData) {
+      setError('Telegram WebApp data not found. Are you opening this in Telegram?');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      // Sign in anonymously to create a Firebase user for this Telegram session
-      const result = await signInAnonymously(auth);
-      // We can store the Telegram user data in Firestore later in the onboarding or dashboard
-      // onAuthStateChanged in App.tsx will handle the rest
+      console.log('Login: Sending initData to /api/auth/telegram...');
+      const response = await fetch('/api/auth/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: window.Telegram.WebApp.initData })
+      });
+
+      const data = await response.json();
+      if (data.token) {
+        console.log('Login: Received custom token, signing in...');
+        await signInWithCustomToken(auth, data.token);
+      } else {
+        throw new Error(data.error || 'Failed to authenticate with Telegram');
+      }
     } catch (err: any) {
-      console.error('Telegram login error:', err);
-      setError(err.message || 'Failed to sign in with Telegram. Please try again.');
+      console.error('Telegram auth error:', err);
+      setError(err.message || 'Failed to sign in with Telegram.');
       setIsLoading(false);
     }
   };
+
+  const handleTonLogin = async () => {
+    if (!tonAddress) {
+      tonConnectUI.openModal();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/ton', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: tonAddress })
+      });
+
+      const data = await response.json();
+      if (data.token) {
+        await signInWithCustomToken(auth, data.token);
+      } else {
+        throw new Error(data.error || 'Failed to authenticate with TON');
+      }
+    } catch (err: any) {
+      console.error('TON auth error:', err);
+      setError(err.message || 'Failed to sign in with TON Wallet.');
+      setIsLoading(false);
+    }
+  };
+
+  // Auto-login with Telegram if possible
+  useEffect(() => {
+    const autoLogin = async () => {
+      if (window.Telegram?.WebApp?.initData && !auth.currentUser && !isLoading) {
+        console.log('Login: Attempting Telegram auto-login...');
+        await handleTelegramLogin();
+      }
+    };
+    autoLogin();
+  }, []);
 
   return (
     <div className="h-full flex flex-col items-center p-4 md:p-6 relative bg-brand-bg text-white overflow-x-hidden overflow-y-auto">
@@ -104,23 +155,7 @@ export default function Login({ onLoginSuccess, onDemoLogin }: { onLoginSuccess:
             </div>
           )}
           
-          {isTelegram ? (
-            <motion.button
-              onClick={handleTelegramLogin}
-              disabled={isLoading}
-              whileHover={{ scale: 1.03, y: -4 }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full py-4 md:py-6 rounded-2xl md:rounded-[2rem] bg-[#2AABEE] text-white font-black text-sm md:text-xl uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 shadow-[0_15px_30px_rgba(42,171,238,0.2)] hover:shadow-[0_20px_40px_rgba(42,171,238,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 md:w-7 md:h-7 animate-spin" />
-              ) : (
-                <>
-                  <Send className="w-5 h-5 md:w-7 md:h-7 group-hover/btn:rotate-12 transition-transform" /> Continue with Telegram
-                </>
-              )}
-            </motion.button>
-          ) : (
+          <div className="space-y-4 w-full">
             <motion.button
               onClick={handleLogin}
               disabled={isLoading}
@@ -136,25 +171,43 @@ export default function Login({ onLoginSuccess, onDemoLogin }: { onLoginSuccess:
                 </>
               )}
             </motion.button>
-          )}
 
-          <div className="flex items-center gap-4 md:gap-6 py-2 md:py-4">
-            <div className="flex-1 h-px bg-white/10"></div>
-            <span className="text-white/20 text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em]">OR</span>
-            <div className="flex-1 h-px bg-white/10"></div>
+            {window.Telegram?.WebApp?.initData && (
+              <motion.button
+                onClick={handleTelegramLogin}
+                disabled={isLoading}
+                whileHover={{ scale: 1.03, y: -4 }}
+                whileTap={{ scale: 0.97 }}
+                className="w-full py-4 md:py-6 rounded-2xl md:rounded-[2rem] bg-[#24A1DE] text-white font-black text-sm md:text-xl uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 shadow-[0_15px_30px_rgba(36,161,222,0.2)] hover:shadow-[0_20px_40px_rgba(36,161,222,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 md:w-7 md:h-7 animate-spin" />
+                ) : (
+                  <>
+                    <Send className="w-5 h-5 md:w-7 md:h-7 group-hover/btn:rotate-12 transition-transform" /> Continue with Telegram
+                  </>
+                )}
+              </motion.button>
+            )}
+
+            <motion.button
+              onClick={handleTonLogin}
+              disabled={isLoading}
+              whileHover={{ scale: 1.03, y: -4 }}
+              whileTap={{ scale: 0.97 }}
+              className="w-full py-4 md:py-6 rounded-2xl md:rounded-[2rem] bg-[#0098EA] text-white font-black text-sm md:text-xl uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 shadow-[0_15px_30px_rgba(0,152,234,0.2)] hover:shadow-[0_20px_40px_rgba(0,152,234,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 md:w-7 md:h-7 animate-spin" />
+              ) : (
+                <>
+                  <Wallet className="w-5 h-5 md:w-7 md:h-7 group-hover/btn:rotate-12 transition-transform" /> {tonAddress ? 'Sync TON Wallet' : 'Connect TON Wallet'}
+                </>
+              )}
+            </motion.button>
           </div>
-
-          <motion.button
-            onClick={onDemoLogin}
-            disabled={isLoading}
-            whileHover={{ scale: 1.03, y: -4 }}
-            whileTap={{ scale: 0.97 }}
-            className="w-full py-4 md:py-6 rounded-2xl md:rounded-[2rem] bg-black/40 border border-white/15 text-white font-black text-sm md:text-xl uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 hover:bg-white/10 hover:border-brand-teal/30 transition-all group/demo shadow-xl"
-          >
-            <Zap className="w-5 h-5 md:w-7 md:h-7 text-brand-teal group-hover/demo:scale-125 transition-transform drop-shadow-[0_0_10px_rgba(0,245,160,0.5)]" /> Try Demo Mode
-          </motion.button>
         </div>
-        
+
         <p className="text-[10px] md:text-[11px] text-white/40 mt-8 md:mt-12 leading-relaxed max-w-[280px] relative z-10">
           Sign in to secure your <span className="text-brand-teal font-black italic">Fighter DNA</span> and unlock global rankings.
         </p>

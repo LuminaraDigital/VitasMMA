@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Mic, MicOff, Activity, Loader2, Upload, Image as ImageIcon, Link as LinkIcon, XCircle } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Activity, Loader2, Upload, Image as ImageIcon, Link as LinkIcon, XCircle, Brain } from 'lucide-react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { getAIContext } from '../utils/aiContext';
 import { UserProfile } from '../types';
+import { AI_COSTS } from '../constants';
+import { fetchWithAuth } from '../utils/api';
 
-export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profile: UserProfile, onBack: () => void, onUpdateProfile: (p: UserProfile) => void }) {
+export default function LiveCoach({ profile, onBack, onUpdateProfile, onUpgrade }: { profile: UserProfile, onBack: () => void, onUpdateProfile: (p: UserProfile) => void, onUpgrade: () => void }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +24,15 @@ export default function LiveCoach({ profile, onBack, onUpdateProfile }: { profil
   const playbackQueueRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
   const nextPlayTimeRef = useRef(0);
+  const currentSessionTranscriptRef = useRef<{ role: 'user' | 'model', content: string }[]>([]);
 
   const connectLive = async () => {
+    // Pro users get unlimited coaching
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.LIVE_COACH) {
+      onUpgrade();
+      return;
+    }
+
     setIsConnecting(true);
     setError(null);
     
@@ -54,13 +63,39 @@ Keep responses concise and focused on the next evolution of their game.`;
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
           },
-          systemInstruction,
-          tools: [{ googleSearch: {} }]
+          systemInstruction: systemInstruction + (profile.chatHistory ? `\n\nPREVIOUS CONVERSATION HISTORY:\n${profile.chatHistory.map(m => `${m.role === 'user' ? 'Fighter' : 'Vitas'}: ${m.content}`).join('\n')}` : ''),
+          tools: [{ googleSearch: {} }],
+          outputAudioTranscription: {},
+          inputAudioTranscription: {}
         },
         callbacks: {
           onopen: async () => {
+            currentSessionTranscriptRef.current = [];
             setIsConnected(true);
             setIsConnecting(false);
+            
+            if (!profile.isPro) {
+              try {
+                const creditRes = await fetchWithAuth('/api/use-credits', {
+                  method: 'POST',
+                  body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.LIVE_COACH })
+                });
+                if (!creditRes.ok) {
+                  const err = await creditRes.json();
+                  throw new Error(err.error || 'Failed to deduct credits');
+                }
+                onUpdateProfile({
+                  ...profile,
+                  aiCredits: (profile.aiCredits || 0) - AI_COSTS.LIVE_COACH
+                });
+              } catch (err: any) {
+                console.error("Credit deduction failed:", err);
+                setError(err.message || "Failed to deduct credits");
+                disconnectLive();
+                return;
+              }
+            }
+            
             await startAudioCapture(sessionPromise);
           },
           onmessage: (message: any) => {
@@ -68,10 +103,24 @@ Keep responses concise and focused on the next evolution of their game.`;
             if (base64Audio) {
               playAudioChunk(base64Audio);
             }
+            // Handle transcription for persistent memory
+            if (message.serverContent?.modelTurn?.parts) {
+              const textPart = message.serverContent.modelTurn.parts.find((p: any) => p.text);
+              if (textPart && textPart.text) {
+                // Append to current session transcript
+                const lastMsg = currentSessionTranscriptRef.current[currentSessionTranscriptRef.current.length - 1];
+                if (lastMsg && lastMsg.role === 'model') {
+                  lastMsg.content += textPart.text;
+                } else {
+                  currentSessionTranscriptRef.current.push({ role: 'model', content: textPart.text });
+                }
+              }
+            }
+            
             if (message.serverContent?.interrupted) {
               stopPlayback();
             }
-            
+
             // Extract grounding URLs if available
             const chunks = message.serverContent?.modelTurn?.parts?.[0]?.groundingMetadata?.groundingChunks || message.serverContent?.groundingMetadata?.groundingChunks;
             if (chunks && chunks.length > 0) {
@@ -92,6 +141,14 @@ Keep responses concise and focused on the next evolution of their game.`;
           onclose: () => {
             setIsConnected(false);
             stopAudioCapture();
+            
+            // Save accumulated transcript to profile
+            if (currentSessionTranscriptRef.current.length > 0) {
+              onUpdateProfile({
+                ...profile,
+                chatHistory: [...(profile.chatHistory || []), ...currentSessionTranscriptRef.current].slice(-20)
+              });
+            }
           },
           onerror: (err: any) => {
             console.error("Live API Error:", err);
@@ -114,10 +171,10 @@ Keep responses concise and focused on the next evolution of their game.`;
 
   const startAudioCapture = async (sessionPromise: Promise<any>) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 24000, channelCount: 1 } });
       mediaStreamRef.current = stream;
       
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextRef.current = audioContext;
       
       const source = audioContext.createMediaStreamSource(stream);
@@ -146,7 +203,7 @@ Keep responses concise and focused on the next evolution of their game.`;
         sessionPromise.then((session) => {
           if (isConnected) {
             session.sendRealtimeInput({
-              audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+              audio: { data: base64Data, mimeType: 'audio/pcm;rate=24000' }
             });
           }
         });
@@ -276,6 +333,8 @@ Keep responses concise and focused on the next evolution of their game.`;
 
   return (
     <div className="h-full flex flex-col bg-brand-bg text-white overflow-hidden relative font-sans">
+
+      
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-brand-violet/10 rounded-full blur-[150px] animate-pulse" />
@@ -286,21 +345,27 @@ Keep responses concise and focused on the next evolution of their game.`;
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
       </div>
 
-      <header className="sticky top-0 z-50 glass-dark px-4 md:px-6 py-4 md:py-6 flex items-center gap-4 md:gap-6 border-b border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-        <motion.button 
-          whileHover={{ scale: 1.1, x: -2, backgroundColor: 'rgba(255,255,255,0.1)' }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => { disconnectLive(); onBack(); }} 
-          className="p-2 md:p-3 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-xl"
-        >
-          <ArrowLeft className="w-5 h-5 text-white/80" />
-        </motion.button>
-        <div className="flex flex-col">
-          <h1 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-gradient leading-none">Voice Coach</h1>
-          <div className="flex items-center gap-2 mt-1 md:mt-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isConnected ? 'bg-brand-teal' : 'bg-white/20'}`} />
-            <span className="text-[8px] md:text-[9px] font-black italic uppercase tracking-[0.3em] md:tracking-[0.4em] text-white/40">Live AI Link</span>
+      <header className="sticky top-0 z-50 glass-dark px-4 md:px-6 py-4 md:py-6 flex items-center justify-between border-b border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+        <div className="flex items-center gap-4 md:gap-6">
+          <motion.button 
+            whileHover={{ scale: 1.1, x: -2, backgroundColor: 'rgba(255,255,255,0.1)' }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => { disconnectLive(); onBack(); }} 
+            className="p-2 md:p-3 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-xl"
+          >
+            <ArrowLeft className="w-5 h-5 text-white/80" />
+          </motion.button>
+          <div className="flex flex-col">
+            <h1 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-gradient leading-none">Voice Coach</h1>
+            <div className="flex items-center gap-2 mt-1 md:mt-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isConnected ? 'bg-brand-teal' : 'bg-white/20'}`} />
+              <span className="text-[8px] md:text-[9px] font-black italic uppercase tracking-[0.3em] md:tracking-[0.4em] text-white/40">Live AI Link</span>
+            </div>
           </div>
+        </div>
+        <div className="flex items-center gap-1.5 bg-brand-teal/10 px-3 py-1.5 rounded-lg border border-brand-teal/30">
+          <Brain className="w-4 h-4 text-brand-teal" />
+          <span className="font-mono text-xs text-brand-teal font-bold">{profile.aiCredits ?? 100} V-Coins</span>
         </div>
       </header>
 
@@ -454,7 +519,10 @@ Keep responses concise and focused on the next evolution of their game.`;
             >
               <div className="absolute inset-0 bg-white/30 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-expo" />
               <Mic className="w-5 h-5 md:w-8 md:h-8 relative z-10" /> 
-              <span className="relative z-10">Connect Link</span>
+              <span className="relative z-10 flex items-center gap-2">
+                Connect Link
+                <span className="text-xs md:text-sm bg-black/20 px-2 md:px-3 py-1 rounded-full flex items-center gap-1 md:gap-2 ml-2 text-white"><Brain className="w-3 h-3 md:w-4 md:h-4" /> {AI_COSTS.LIVE_COACH}</span>
+              </span>
             </motion.button>
           ) : (
             <div className="flex flex-col items-center gap-4 md:gap-10 w-full">

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Save, User, Scale, Ruler, Activity } from 'lucide-react';
+import { X, Save, User, Scale, Ruler, Activity, Zap, Brain } from 'lucide-react';
 import { UserProfile } from '../types';
+import { AI_COSTS } from '../constants';
 import { getWeightClassInfo } from '../utils/mma';
+import { fetchWithAuth } from '../utils/api';
+import BuyCoinsModal from './BuyCoinsModal';
 
 export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
   const [firstName, setFirstName] = useState(profile.firstName || '');
@@ -14,6 +17,9 @@ export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { 
   const [striking, setStriking] = useState(profile.striking || 50);
   const [grappling, setGrappling] = useState(profile.grappling || 50);
   const [clinch, setClinch] = useState(profile.clinch || 50);
+
+  const [showBuyCoins, setShowBuyCoins] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const getWeightClass = (wStr: string) => {
     const w = parseFloat(wStr);
@@ -30,7 +36,33 @@ export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { 
     return 'Prospect';
   };
 
-  const handleSave = () => {
+  const dnaChanged = 
+    striking !== (profile.striking || 50) ||
+    grappling !== (profile.grappling || 50) ||
+    clinch !== (profile.clinch || 50) ||
+    height !== (profile.height || '') ||
+    weight !== (profile.weight?.toString() || '');
+
+  const handleSave = async () => {
+    if (dnaChanged) {
+      if ((profile.aiCredits || 0) < AI_COSTS.PROFILE_UPDATE) {
+        setShowBuyCoins(true);
+        return;
+      }
+      
+      setIsSaving(true);
+      try {
+        await fetchWithAuth('/api/use-credits', {
+          method: 'POST',
+          body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.PROFILE_UPDATE })
+        });
+      } catch (err) {
+        console.error(err);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     onUpdateProfile({
       ...profile,
       firstName,
@@ -42,7 +74,8 @@ export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { 
       striking,
       grappling,
       clinch,
-      archetype: getArchetype()
+      archetype: getArchetype(),
+      aiCredits: dnaChanged ? (profile.aiCredits || 0) - AI_COSTS.PROFILE_UPDATE : profile.aiCredits
     });
     onBack();
   };
@@ -144,6 +177,27 @@ export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { 
             </div>
 
             <div className="pt-6 border-t border-white/10">
+              <h3 className="text-lg font-black italic uppercase tracking-tighter mb-6">V-Coins</h3>
+              <div className="glass border border-brand-violet/30 bg-brand-violet/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 rounded-full bg-brand-violet/20 flex items-center justify-center border border-brand-violet/40">
+                    <Brain className="w-8 h-8 text-brand-violet" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black italic uppercase tracking-widest text-brand-violet mb-1">Available Balance</p>
+                    <p className="text-3xl font-black italic uppercase tracking-tighter text-white">{profile.aiCredits ?? 100}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowBuyCoins(true)}
+                  className="w-full md:w-auto px-6 py-3 bg-brand-violet text-white font-black italic uppercase tracking-widest rounded-xl hover:bg-brand-violet/80 transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-95"
+                >
+                  Top Up
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-white/10">
               <h3 className="text-lg font-black italic uppercase tracking-tighter mb-6">Fighter Attributes</h3>
               
               <div className="space-y-6">
@@ -166,12 +220,24 @@ export default function ProfileSettings({ profile, onUpdateProfile, onBack }: { 
             whileHover={{ scale: 1.02, y: -4 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleSave}
-            className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-brand-teal to-brand-blue font-black text-xl italic uppercase tracking-tighter flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(0,229,255,0.4)] text-black"
+            disabled={isSaving}
+            className={`w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-brand-teal to-brand-blue font-black text-xl italic uppercase tracking-tighter flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(0,229,255,0.4)] text-black ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <Save className="w-6 h-6" /> Save Profile
+            {isSaving ? <Activity className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />} 
+            {dnaChanged ? `Update DNA (${AI_COSTS.PROFILE_UPDATE} V-Coins)` : 'Save Profile'}
           </motion.button>
         </div>
       </div>
+
+      {showBuyCoins && (
+        <BuyCoinsModal 
+          onClose={() => setShowBuyCoins(false)} 
+          userId={profile.id} 
+          isPro={profile.isPro} 
+          profile={profile}
+          onUpdateProfile={onUpdateProfile}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,13 @@
-import { ArrowLeft, Play, Upload, Camera, Square, Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react';
+import { ArrowLeft, Play, Upload, Camera, Square, Loader2, CheckCircle2, XCircle, Zap, Brain } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleGenAI, Type } from '@google/genai';
 import { UserProfile, CampTask } from '../types';
-import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { getAIContext } from '../utils/aiContext';
+import { AI_COSTS, LEVEL_XP_THRESHOLD } from '../constants';
+import { fetchWithAuth } from '../utils/api';
 
-export default function CampVerification({ profile, task, onUpdateProfile, onBack, onVerifySuccess }: { profile: UserProfile, task: CampTask, onUpdateProfile: (p: UserProfile) => void, onBack: () => void, onVerifySuccess: () => void }) {
+export default function CampVerification({ profile, task, onUpdateProfile, onBack, onVerifySuccess, onUpgrade }: { profile: UserProfile, task: CampTask, onUpdateProfile: (p: UserProfile) => void, onBack: () => void, onVerifySuccess: () => void, onUpgrade: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -172,6 +174,11 @@ export default function CampVerification({ profile, task, onUpdateProfile, onBac
 
   const analyzeVideo = async () => {
     if (!file) return;
+
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.CAMP_VERIFICATION) {
+      onUpgrade();
+      return;
+    }
     
     setIsUploadingToAI(true);
     setUploadToAIProgress(0);
@@ -225,7 +232,26 @@ ${getAIContext(profile)}
 
 ${taskSpecificInstructions}
 
-Analyze the provided video to verify if the user actually completed this task according to the criteria.`;
+Analyze the provided video to verify if the user actually completed this task according to the criteria.
+
+RETURN A JSON OBJECT WITH THESE FIELDS:
+{
+  "isVerified": boolean,
+  "analysis": "string (detailed explanation)",
+  "formCorrections": ["string (tip 1)", "string (tip 2)"]
+}`;
+
+        // Deduct credits via server if not Pro
+        if (!profile.isPro) {
+          const creditRes = await fetchWithAuth('/api/use-credits', {
+            method: 'POST',
+            body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.CAMP_VERIFICATION })
+          });
+          if (!creditRes.ok) {
+            const err = await creditRes.json();
+            throw new Error(err.error || 'Failed to deduct credits');
+          }
+        }
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const response = await ai.models.generateContent({
@@ -244,77 +270,72 @@ Analyze the provided video to verify if the user actually completed this task ac
             }
           ],
           config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-            responseMimeType: "application/json",
+            responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
               properties: {
-                isVerified: { type: Type.BOOLEAN, description: "True if the user verified the task criteria, false otherwise." },
-                analysis: { type: Type.STRING, description: "Detailed explanation of why it passed or failed. Be specific based on the video." },
+                isVerified: { type: Type.BOOLEAN },
+                analysis: { type: Type.STRING },
                 formCorrections: { 
-                  type: Type.ARRAY, 
-                  items: { type: Type.STRING },
-                  description: "1-2 quick tips to improve next time." 
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
                 }
               },
-              required: ["isVerified", "analysis", "formCorrections"]
+              required: ['isVerified', 'analysis', 'formCorrections']
             }
           }
         });
+
+        const result = JSON.parse(response.text || '{}');
         
-        try {
-          const result = JSON.parse(response.text || "{}");
+        const verified = result.isVerified === true;
+        setIsVerified(verified);
+        
+        let formattedAnalysis = `## Analysis\n${result.analysis || 'No analysis provided.'}\n\n`;
+        if (result.formCorrections && result.formCorrections.length > 0) {
+          formattedAnalysis += `## Form Corrections\n`;
+          result.formCorrections.forEach((tip: string) => {
+            formattedAnalysis += `- ${tip}\n`;
+          });
+        }
+        setAnalysis(formattedAnalysis);
+        
+        if (verified) {
+          const xp = task.xpReward;
+          setXpEarned(xp);
           
-          const verified = result.isVerified === true;
-          setIsVerified(verified);
-          
-          let formattedAnalysis = `## Analysis\n${result.analysis || 'No analysis provided.'}\n\n`;
-          if (result.formCorrections && result.formCorrections.length > 0) {
-            formattedAnalysis += `## Form Corrections\n`;
-            result.formCorrections.forEach((tip: string) => {
-              formattedAnalysis += `- ${tip}\n`;
+          // Add XP via server
+          try {
+            await fetchWithAuth('/api/add-xp', {
+              method: 'POST',
+              body: JSON.stringify({ userId: profile.id, xpAmount: xp, reason: 'camp_verification' })
             });
+          } catch (err) {
+            console.error('Error adding XP:', err);
           }
-          setAnalysis(formattedAnalysis);
-          
-          if (verified) {
-            const xp = task.xpReward;
-            setXpEarned(xp);
-            
-            let newXp = (profile.xp || 0) + xp;
-            let newLevel = profile.level || 1;
-            
-            if (newXp >= newLevel * 1000) {
-              newLevel += 1;
-            }
 
-            // Mark task complete in active camp
-            let updatedCamp = profile.activeCamp;
-            if (updatedCamp) {
-              updatedCamp = {
-                ...updatedCamp,
-                tasks: updatedCamp.tasks.map(t => t.id === task.id ? { ...t, completed: true } : t)
-              };
-            }
-
-            onUpdateProfile({
-              ...profile,
-              xp: newXp,
-              level: newLevel,
-              activeCamp: updatedCamp
-            });
+          // Mark task complete in active camp
+          let updatedCamp = profile.activeCamp;
+          if (updatedCamp) {
+            updatedCamp = {
+              ...updatedCamp,
+              tasks: updatedCamp.tasks.map(t => t.id === task.id ? { ...t, completed: true } : t)
+            };
           }
-        } catch (parseError) {
-          console.error("Failed to parse AI response:", parseError);
-          setAnalysis("Error parsing verification results. Please try again.");
-          setIsVerified(false);
+
+          onUpdateProfile({
+            ...profile,
+            activeCamp: updatedCamp,
+            // Optimistic update for credits if not Pro
+            aiCredits: profile.isPro ? profile.aiCredits : (profile.aiCredits || 0) - AI_COSTS.CAMP_VERIFICATION
+          });
         }
         
         setIsAnalyzing(false);
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setAnalysis("Error analyzing video. Please try again.");
+      setError(error.message || "Error verifying task. Please try again.");
       setIsAnalyzing(false);
     }
   };
@@ -427,7 +448,8 @@ Analyze the provided video to verify if the user actually completed this task ac
                 onClick={analyzeVideo}
                 className="w-full py-3 md:py-4 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#0088FF] font-bold text-base md:text-lg uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] text-black"
               >
-                <Play className="w-4 h-4 md:w-5 md:h-5 fill-current" /> Verify Task
+                <Play className="w-4 h-4 md:w-5 md:h-5 fill-current" /> Verify Task 
+                <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full flex items-center gap-1 ml-2"><Brain className="w-3 h-3" /> {AI_COSTS.CAMP_VERIFICATION}</span>
               </button>
             )}
 
@@ -532,6 +554,8 @@ Analyze the provided video to verify if the user actually completed this task ac
           </div>
         )}
       </main>
+
+
     </div>
   );
 }

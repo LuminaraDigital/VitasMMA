@@ -1,10 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Dumbbell, CheckCircle2, Zap, Target, Activity, Youtube, ExternalLink, Trophy, TrendingUp } from 'lucide-react';
+import { ChevronLeft, Dumbbell, CheckCircle2, Zap, Target, Activity, Youtube, ExternalLink, Trophy, TrendingUp, Lock } from 'lucide-react';
 import { UserProfile } from '../types';
+import BuyCoinsModal from './BuyCoinsModal';
+import { AI_COSTS, XP_REWARDS, COIN_REWARDS, LEVEL_XP_THRESHOLD } from '../constants';
+import { fetchWithAuth } from '../utils/api';
 
 export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
   const [completed, setCompleted] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [showBuyCoins, setShowBuyCoins] = useState(false);
   const [exerciseLogs, setExerciseLogs] = useState<Record<string, { weight: string, reps: string, rpe: string }>>({});
 
   const plan = useMemo(() => {
@@ -63,15 +68,55 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
 
   const loggedCount = plan.exercises.filter(ex => exerciseLogs[ex.name]?.weight || exerciseLogs[ex.name]?.reps).length;
 
+  const handleGenerate = async () => {
+    // Pro users get unlimited generation
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.STRENGTH_LAYER_LOG) {
+      setShowBuyCoins(true);
+      return;
+    }
+
+    try {
+      // Deduct credits via server if not Pro
+      if (!profile.isPro) {
+        await fetchWithAuth('/api/use-credits', {
+          method: 'POST',
+          body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.STRENGTH_LAYER_LOG })
+        });
+
+        onUpdateProfile({
+          ...profile,
+          aiCredits: (profile.aiCredits || 0) - AI_COSTS.STRENGTH_LAYER_LOG
+        });
+        setIsGenerated(true);
+      } else {
+        setIsGenerated(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleComplete = () => {
     if (completed) return;
     setCompleted(true);
     
-    // Gamification: Award VMMA (Coins) and XP
-    const rewardCoins = 150;
-    const rewardXp = 300;
-    const newXp = profile.xp + rewardXp;
-    const newLevel = Math.floor(newXp / 1000) + 1;
+    // Gamification: Award VMMA (Coins) and XP via server
+    const rewardCoins = COIN_REWARDS.STRENGTH_SESSION;
+    const rewardXp = XP_REWARDS.STRENGTH_SESSION;
+    
+    try {
+      fetchWithAuth('/api/complete-session', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          userId: profile.id, 
+          xpAmount: rewardXp, 
+          coinAmount: rewardCoins,
+          sessionType: 'strength_layer'
+        })
+      });
+    } catch (err) {
+      console.error('Error completing session:', err);
+    }
 
     const newLogs = Object.entries(exerciseLogs).map(([exercise, data]: [string, { weight: string, reps: string, rpe: string }]) => ({
       date: new Date().toISOString(),
@@ -84,9 +129,6 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
     setTimeout(() => {
       onUpdateProfile({
         ...profile,
-        coins: (profile.coins || 0) + rewardCoins,
-        xp: newXp,
-        level: newLevel,
         streak: profile.streak + 1,
         strengthLogs: [...(profile.strengthLogs || []), ...newLogs]
       });
@@ -108,8 +150,35 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
         <div className="w-9"></div>
       </header>
 
-      <div className="flex-1 relative z-10 space-y-6">
-        <div className="bg-[#111623] border border-[#1A2235] rounded-2xl p-5 shadow-lg">
+      {!isGenerated ? (
+        <div className="flex-1 flex flex-col items-center justify-center relative z-10 p-6 text-center">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#111623] border border-[#1A2235] rounded-3xl p-8 shadow-2xl max-w-sm w-full"
+          >
+            <div className="w-20 h-20 bg-brand-teal/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-brand-teal/50 shadow-[0_0_30px_rgba(0,245,160,0.3)]">
+              <Dumbbell className="w-10 h-10 text-brand-teal" />
+            </div>
+            <h2 className="text-2xl font-black italic uppercase tracking-tighter mb-4">Generate Strength Plan</h2>
+            <p className="text-gray-400 text-sm mb-8">
+              AI will analyze your MMA base style ({profile.baseStyle || 'Mixed'}) and generate a custom 4-week S&C protocol to maximize your power and endurance.
+            </p>
+            
+            <button
+              onClick={handleGenerate}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-teal to-brand-blue text-black font-black uppercase tracking-widest shadow-[0_0_20px_rgba(0,245,160,0.4)] hover:shadow-[0_0_30px_rgba(0,245,160,0.6)] transition-all flex items-center justify-center gap-2"
+            >
+              <Zap className="w-5 h-5" /> Generate Plan
+            </button>
+            <p className="text-xs font-mono text-brand-teal mt-4">Cost: {AI_COSTS.STRENGTH_LAYER_LOG} V-Coins</p>
+            <p className="text-xs font-mono text-gray-500 mt-1">Balance: {profile.aiCredits || 0} V-Coins</p>
+          </motion.div>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 relative z-10 space-y-6">
+            <div className="bg-[#111623] border border-[#1A2235] rounded-2xl p-5 shadow-lg">
           <h2 className="text-sm text-[#00E5FF] uppercase tracking-widest font-bold mb-2">Strength Foundation for Your MMA Style</h2>
           <p className="text-gray-400 text-sm mb-4">2-3 weekly sessions (20-30 min). Scheduled around your existing striking/grappling workouts. Home equipment prioritized.</p>
           
@@ -306,7 +375,7 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
         >
           {completed ? (
             <>
-              <CheckCircle2 className="w-5 h-5" /> Session Logged (+150 VMMA)
+              <CheckCircle2 className="w-5 h-5" /> Session Logged (+{COIN_REWARDS.STRENGTH_SESSION} VMMA)
             </>
           ) : (
             <>
@@ -315,6 +384,18 @@ export default function StrengthLayer({ profile, onUpdateProfile, onBack }: { pr
           )}
         </motion.button>
       </div>
+      </>
+      )}
+
+      {showBuyCoins && (
+        <BuyCoinsModal 
+          onClose={() => setShowBuyCoins(false)} 
+          userId={profile.id} 
+          isPro={profile.isPro} 
+          profile={profile}
+          onUpdateProfile={onUpdateProfile}
+        />
+      )}
     </div>
   );
 }

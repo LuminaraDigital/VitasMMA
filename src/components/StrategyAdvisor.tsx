@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Brain, Loader2, Target, Shield, Zap, Swords, Activity, ShieldAlert, XCircle } from 'lucide-react';
+import { ArrowLeft, Brain, Loader2, Target, Shield, Zap, Swords, Activity, ShieldAlert, XCircle, BookOpen } from 'lucide-react';
 import { UserProfile } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getAIContext } from '../utils/aiContext';
+import { AI_COSTS } from '../constants';
 import ReactMarkdown from 'react-markdown';
+import { fetchWithAuth } from '../utils/api';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Legend } from 'recharts';
+import { searchKnowledgeBase } from '../services/ragService';
 
 interface FighterAttributes {
   striking: number;
@@ -26,18 +29,36 @@ interface StrategyData {
   };
 }
 
-export default function StrategyAdvisor({ profile, onBack }: { profile: UserProfile, onBack: () => void }) {
+export default function StrategyAdvisor({ profile, onBack, onUpdateProfile, onUpgrade }: { profile: UserProfile, onBack: () => void, onUpdateProfile: (p: UserProfile) => void, onUpgrade: () => void }) {
   const [opponentName, setOpponentName] = useState('');
   const [opponentStyle, setOpponentStyle] = useState('');
   const [strategyData, setStrategyData] = useState<StrategyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useRAG, setUseRAG] = useState(true);
 
   const generateStrategy = async () => {
     if (!opponentStyle.trim()) return;
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.STRATEGY_ADVISOR) {
+      onUpgrade();
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
+      let ragContext = "";
+      if (useRAG) {
+        try {
+          const relevantChunks = await searchKnowledgeBase(profile.id, opponentStyle, 3);
+          if (relevantChunks.length > 0) {
+            ragContext = `\n\nRELEVANT KNOWLEDGE BASE CONTEXT:\n${relevantChunks.join('\n---\n')}\n\n`;
+          }
+        } catch (ragErr) {
+          console.warn("RAG search failed, proceeding without it:", ragErr);
+        }
+      }
+
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const model = "gemini-3-flash-preview";
       
@@ -46,6 +67,7 @@ export default function StrategyAdvisor({ profile, onBack }: { profile: UserProf
         Analyze the following matchup and provide a detailed game plan and counter-strategies.
         
         ${getAIContext(profile)}
+        ${ragContext}
         
         OPPONENT NAME: ${opponentName || 'Unknown'}
         OPPONENT STYLE & DESCRIPTION:
@@ -125,6 +147,30 @@ export default function StrategyAdvisor({ profile, onBack }: { profile: UserProf
 
       const data = JSON.parse(response.text || "{}");
       setStrategyData(data);
+      
+      // Deduct credits via server if not Pro
+      if (!profile.isPro) {
+        const creditRes = await fetchWithAuth('/api/use-credits', {
+          method: 'POST',
+          body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.STRATEGY_ADVISOR })
+        });
+        if (!creditRes.ok) {
+          const err = await creditRes.json();
+          throw new Error(err.error || 'Failed to deduct credits');
+        }
+      }
+
+      const newStrategy = {
+        opponent: opponentName || 'Unknown',
+        strategy: data.strategy,
+        date: new Date().toISOString()
+      };
+
+      onUpdateProfile({
+        ...profile,
+        aiCredits: profile.isPro ? profile.aiCredits : (profile.aiCredits || 0) - AI_COSTS.STRATEGY_ADVISOR,
+        strategyHistory: [...(profile.strategyHistory || []), newStrategy].slice(-5)
+      });
     } catch (err) {
       console.error(err);
       setError("Failed to generate strategy. Please try again.");
@@ -157,29 +203,37 @@ export default function StrategyAdvisor({ profile, onBack }: { profile: UserProf
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/[0.02] to-transparent h-[200%] animate-[scan_10s_linear_infinite] pointer-events-none" />
       </div>
 
-      <header className="sticky top-0 z-50 glass-dark px-8 py-6 flex items-center gap-6 border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[3rem]">
-        <motion.button 
-          whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
-          whileTap={{ scale: 0.9 }}
-          onClick={onBack} 
-          className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-xl backdrop-blur-xl"
-        >
-          <ArrowLeft className="w-6 h-6 text-white/90" />
-        </motion.button>
-        <div>
-          <motion.h1 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-3 leading-none drop-shadow-2xl"
+      <header className="sticky top-0 z-50 glass-dark px-8 py-6 flex items-center justify-between border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[3rem]">
+        <div className="flex items-center gap-6">
+          <motion.button 
+            whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
+            whileTap={{ scale: 0.9 }}
+            onClick={onBack} 
+            className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-xl backdrop-blur-xl"
           >
-            STRATEGY <span className="text-brand-teal">ADVISOR</span>
-          </motion.h1>
-          <div className="flex items-center gap-2 mt-2">
-            <div className="w-2 h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
-            <p className="text-[10px] text-brand-teal font-black uppercase tracking-[0.4em] opacity-70">AI FIGHT IQ ENGINE</p>
+            <ArrowLeft className="w-6 h-6 text-white/90" />
+          </motion.button>
+          <div>
+            <motion.h1 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-3 leading-none drop-shadow-2xl"
+            >
+              STRATEGY <span className="text-brand-teal">ADVISOR</span>
+            </motion.h1>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-2 h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
+              <p className="text-[10px] text-brand-teal font-black uppercase tracking-[0.4em] opacity-70">AI FIGHT IQ ENGINE</p>
+            </div>
           </div>
         </div>
+        <div className="flex items-center gap-1.5 bg-brand-teal/10 px-3 py-1.5 rounded-lg border border-brand-teal/30">
+          <Brain className="w-4 h-4 text-brand-teal" />
+          <span className="font-mono text-xs text-brand-teal font-bold">{profile.aiCredits ?? 100} V-Coins</span>
+        </div>
       </header>
+
+
 
       <div className="flex-1 overflow-y-auto p-8 space-y-10 hide-scrollbar relative z-10 pb-24">
         {!strategyData ? (
@@ -225,6 +279,25 @@ export default function StrategyAdvisor({ profile, onBack }: { profile: UserProf
                     />
                   </div>
                   
+                  <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-2xl border border-white/10">
+                    <div className="flex items-center gap-3">
+                      <BookOpen className="w-5 h-5 text-brand-teal" />
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-white/90">Knowledge Base RAG</p>
+                        <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest">Use your uploaded manuals</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setUseRAG(!useRAG)}
+                      className={`w-12 h-6 rounded-full transition-all relative ${useRAG ? 'bg-brand-teal' : 'bg-white/10'}`}
+                    >
+                      <motion.div 
+                        animate={{ x: useRAG ? 24 : 4 }}
+                        className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-lg"
+                      />
+                    </button>
+                  </div>
+                  
                   {error && (
                     <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-xl text-sm flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -253,7 +326,8 @@ export default function StrategyAdvisor({ profile, onBack }: { profile: UserProf
                     ) : (
                       <>
                         <Zap className="w-8 h-8 group-hover:scale-125 transition-transform drop-shadow-md" />
-                        Generate Game Plan
+                        Generate Game Plan 
+                        <span className="text-sm md:text-base bg-black/20 px-3 py-1 rounded-full flex items-center gap-2 ml-2"><Brain className="w-4 h-4 md:w-5 md:h-5" /> {AI_COSTS.STRATEGY_ADVISOR}</span>
                       </>
                     )}
                   </motion.button>

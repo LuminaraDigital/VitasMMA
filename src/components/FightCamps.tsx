@@ -13,6 +13,19 @@ export default function FightCamps({ profile, onUpdateProfile, onBack }: { profi
   const [activeCamp, setActiveCamp] = useState('striking_4w');
   const drills = profile.activeDrills || [];
 
+  // Calculate current day from startDate
+  const calculateCurrentDay = () => {
+    if (!profile.activeCamp?.startDate) return 1;
+    const start = new Date(profile.activeCamp.startDate);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays || 1;
+  };
+
+  const currentDay = calculateCurrentDay();
+  const totalDays = (profile.activeCamp?.durationWeeks || 4) * 7;
+
   const toggleDrill = (id: string) => {
     const updatedDrills = drills.map(d => d.id === id ? { ...d, completed: !d.completed } : d);
     onUpdateProfile({ ...profile, activeDrills: updatedDrills });
@@ -54,7 +67,7 @@ export default function FightCamps({ profile, onUpdateProfile, onBack }: { profi
         <div className="flex justify-between items-end mb-6">
           <div>
             <h2 className="text-2xl font-black uppercase tracking-wider flex items-center gap-2">
-              <CalendarDays className="text-purple-500" /> Day 7 / 28
+              <CalendarDays className="text-purple-500" /> Day {currentDay} / {totalDays}
             </h2>
             <p className="text-gray-400">Complete tasks to earn +50 XP</p>
           </div>

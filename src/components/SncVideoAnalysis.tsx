@@ -1,9 +1,11 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu, Youtube, ExternalLink, Zap, Dumbbell, XCircle } from 'lucide-react';
+import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu, Youtube, ExternalLink, Zap, Dumbbell, XCircle, Brain } from 'lucide-react';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { getAIContext } from '../utils/aiContext';
+import { AI_COSTS, XP_REWARDS } from '../constants';
 import { UserProfile } from '../types';
+import { fetchWithAuth } from '../utils/api';
 
 function LoadingState() {
   const [step, setStep] = useState(0);
@@ -70,7 +72,7 @@ function LoadingState() {
   );
 }
 
-export default function SncVideoAnalysis({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
+export default function SncVideoAnalysis({ profile, onUpdateProfile, onBack, onUpgrade }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void, onUpgrade: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -188,6 +190,12 @@ export default function SncVideoAnalysis({ profile, onUpdateProfile, onBack }: {
 
   const analyzeVideo = async () => {
     if (!file) return;
+
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.SNC_VIDEO_ANALYSIS) {
+      onUpgrade();
+      return;
+    }
+
     setIsAnalyzing(true);
     
     try {
@@ -216,6 +224,18 @@ PROVIDE A HIGHLY STRUCTURED ANALYSIS USING THIS EXACT FORMAT (use markdown):
 (Suggest 2-3 specific cues or accessory exercises to fix the weaknesses identified above.)
 
 Use Google Search to look up YouTube videos of professional lifters performing this exercise to reference gold-standard techniques in your analysis if helpful. Format as clean markdown.`;
+
+        // Deduct credits via server if not Pro
+        if (!profile.isPro) {
+          try {
+            await fetchWithAuth('/api/use-credits', {
+              method: 'POST',
+              body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.SNC_VIDEO_ANALYSIS })
+            });
+          } catch (err: any) {
+            throw new Error(err.message || 'Failed to deduct credits');
+          }
+        }
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const response = await ai.models.generateContent({
@@ -255,6 +275,24 @@ Use Google Search to look up YouTube videos of professional lifters performing t
           setGroundingUrls(urls);
         } else {
           setGroundingUrls([]);
+        }
+        
+        onUpdateProfile({
+          ...profile,
+          // Optimistic update for credits if not Pro
+          aiCredits: profile.isPro ? profile.aiCredits : (profile.aiCredits || 0) - AI_COSTS.SNC_VIDEO_ANALYSIS
+        });
+
+        // Add XP via server for successful analysis
+        if (currentFormScore >= 70) {
+          try {
+            await fetchWithAuth('/api/add-xp', {
+              method: 'POST',
+              body: JSON.stringify({ userId: profile.id, xpAmount: XP_REWARDS.VIDEO_ANALYSIS_BASE, reason: 'snc_analysis' })
+            });
+          } catch (err) {
+            console.error('Error adding XP:', err);
+          }
         }
         
         setIsAnalyzing(false);
@@ -309,32 +347,40 @@ Use Google Search to look up YouTube videos of professional lifters performing t
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,#000_70%,transparent_100%)]" />
       </div>
 
-      <header className="sticky top-0 z-50 glass-dark px-4 md:px-8 py-4 md:py-6 flex items-center gap-4 md:gap-6 border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[2rem] md:rounded-b-[3.5rem]">
-        <motion.button 
-          whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => {
-            if (isRecording) stopRecording();
-            onBack();
-          }} 
-          className="p-2 md:p-3.5 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
-        >
-          <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-white/90" />
-        </motion.button>
-        <div>
-          <motion.h1 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+      <header className="sticky top-0 z-50 glass-dark px-4 md:px-8 py-4 md:py-6 flex items-center justify-between border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[2rem] md:rounded-b-[3.5rem]">
+        <div className="flex items-center gap-4 md:gap-6">
+          <motion.button 
+            whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => {
+              if (isRecording) stopRecording();
+              onBack();
+            }} 
+            className="p-2 md:p-3.5 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
           >
-            S&C Analyzer
-          </motion.h1>
-          <div className="flex items-center gap-2 mt-1 md:mt-2">
-            <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-brand-blue shadow-[0_0_10px_rgba(0,195,255,0.8)] animate-pulse" />
-            <p className="text-[8px] md:text-[10px] text-brand-blue font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70">AI FORM ENGINE</p>
+            <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-white/90" />
+          </motion.button>
+          <div>
+            <motion.h1 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+            >
+              S&C Analyzer
+            </motion.h1>
+            <div className="flex items-center gap-2 mt-1 md:mt-2">
+              <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-brand-blue shadow-[0_0_10px_rgba(0,195,255,0.8)] animate-pulse" />
+              <p className="text-[8px] md:text-[10px] text-brand-blue font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70">AI FORM ENGINE</p>
+            </div>
           </div>
         </div>
+        <div className="flex items-center gap-1.5 bg-brand-violet/10 px-3 py-1.5 rounded-lg border border-brand-violet/30">
+          <Brain className="w-4 h-4 text-brand-violet" />
+          <span className="font-mono text-xs text-brand-violet font-bold">{profile.aiCredits ?? 100} V-Coins</span>
+        </div>
       </header>
+
+
 
       {error && (
         <div className="mx-4 mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium relative z-50 flex items-center justify-between">
@@ -478,7 +524,8 @@ Use Google Search to look up YouTube videos of professional lifters performing t
                   className="w-full py-6 md:py-8 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-r from-brand-blue to-brand-violet font-black text-2xl md:text-3xl italic uppercase tracking-tighter flex items-center justify-center gap-4 md:gap-6 shadow-[0_15px_30px_rgba(0,0,0,0.5)] md:shadow-[0_30px_60px_rgba(0,0,0,0.5)] group relative overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 skew-x-12" />
-                  <Play className="w-8 h-8 md:w-10 md:h-10 fill-current group-hover:scale-125 transition-transform drop-shadow-lg" /> Analyze Form
+                  <Brain className="w-8 h-8 md:w-10 md:h-10 fill-current group-hover:scale-125 transition-transform drop-shadow-lg" /> Analyze Form 
+                  <span className="text-sm md:text-base bg-black/20 px-3 py-1 rounded-full flex items-center gap-2 ml-2"><Brain className="w-4 h-4 md:w-5 md:h-5" /> {AI_COSTS.SNC_VIDEO_ANALYSIS}</span>
                 </motion.button>
               </div>
             )}

@@ -1,9 +1,11 @@
 import { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu, Youtube, ExternalLink, Zap, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ArrowLeft, Upload, Play, Loader2, CheckCircle2, Camera, Square, Circle, ZoomIn, Activity, Shield, Search, Cpu, Youtube, ExternalLink, Zap, XCircle, Brain } from 'lucide-react';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { getAIContext } from '../utils/aiContext';
+import { AI_COSTS, XP_REWARDS, LEVEL_XP_THRESHOLD } from '../constants';
 import { UserProfile } from '../types';
+import { fetchWithAuth } from '../utils/api';
 
 function LoadingState() {
   const [step, setStep] = useState(0);
@@ -70,7 +72,7 @@ function LoadingState() {
   );
 }
 
-export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void }) {
+export default function VideoAnalysis({ profile, onUpdateProfile, onBack, onUpgrade }: { profile: UserProfile, onUpdateProfile: (p: UserProfile) => void, onBack: () => void, onUpgrade: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -78,7 +80,7 @@ export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { pr
   const [groundingUrls, setGroundingUrls] = useState<{uri: string, title: string}[]>([]);
   const [analysisDrillIds, setAnalysisDrillIds] = useState<string[]>([]);
   const [userClaim, setUserClaim] = useState<string>("");
-  const [requestedXp, setRequestedXp] = useState<number>(50);
+  const [requestedXp, setRequestedXp] = useState<number>(XP_REWARDS.VIDEO_ANALYSIS_BASE);
   const [sessionScore, setSessionScore] = useState<number | null>(null);
   const [xpEarned, setXpEarned] = useState<number | null>(null);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -187,6 +189,12 @@ export default function VideoAnalysis({ profile, onUpdateProfile, onBack }: { pr
 
   const analyzeVideo = async () => {
     if (!file) return;
+    
+    if (!profile.isPro && (profile.aiCredits || 0) < AI_COSTS.VIDEO_ANALYSIS) {
+      onUpgrade();
+      return;
+    }
+
     setIsAnalyzing(true);
     
     try {
@@ -226,6 +234,18 @@ PROVIDE A HIGHLY STRUCTURED ANALYSIS USING THIS EXACT FORMAT (use markdown):
 (Compare this performance to their past habits if previous analyses exist.)
 
 Use Google Search to look up YouTube videos of professional fighters to reference gold-standard techniques in your analysis if helpful. Format as clean markdown.`;
+
+        // Deduct credits via server if not Pro
+        if (!profile.isPro) {
+          const creditRes = await fetchWithAuth('/api/use-credits', {
+            method: 'POST',
+            body: JSON.stringify({ userId: profile.id, amount: AI_COSTS.VIDEO_ANALYSIS })
+          });
+          if (!creditRes.ok) {
+            const err = await creditRes.json();
+            throw new Error(err.error || 'Failed to deduct credits');
+          }
+        }
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const response = await ai.models.generateContent({
@@ -282,19 +302,26 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
         
         const updatedHistory = [...(profile.analysisHistory || []), newAnalysis].slice(-5); // Keep last 5
         
-        // Update profile with new XP and history
-        let newXp = (profile.xp || 0) + currentXpEarned;
-        let newLevel = profile.level || 1;
-        
-        // Level up logic (every 1000 XP)
-        if (newXp >= newLevel * 1000) {
-          newLevel += 1;
-        }
-
         // Streak logic
         const today = new Date().toISOString().split('T')[0];
         let newStreak = profile.streak || 0;
         if (verified) {
+          const xp = XP_REWARDS.VIDEO_ANALYSIS_BASE;
+          setXpEarned(xp);
+          
+          // Add XP via server
+          try {
+            await fetchWithAuth('/api/add-xp', {
+              method: 'POST',
+              body: JSON.stringify({ userId: profile.id, xpAmount: xp, reason: 'video_analysis' })
+            });
+          } catch (err) {
+            console.error('Error adding XP:', err);
+          }
+
+          // Streak logic
+          const today = new Date().toISOString().split('T')[0];
+          let newStreak = profile.streak || 0;
           if (profile.lastActiveDate !== today) {
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
@@ -306,22 +333,29 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
               newStreak = 1;
             }
           }
-        }
 
-        onUpdateProfile({
-          ...profile,
-          xp: newXp,
-          level: newLevel,
-          streak: newStreak,
-          lastActiveDate: verified ? today : profile.lastActiveDate,
-          analysisHistory: updatedHistory
-        });
+          onUpdateProfile({
+            ...profile,
+            streak: newStreak,
+            lastActiveDate: today,
+            analysisHistory: updatedHistory,
+            // Optimistic update for credits if not Pro
+            aiCredits: profile.isPro ? profile.aiCredits : (profile.aiCredits || 0) - AI_COSTS.VIDEO_ANALYSIS
+          });
+        } else {
+          onUpdateProfile({
+            ...profile,
+            analysisHistory: updatedHistory,
+            // Optimistic update for credits if not Pro
+            aiCredits: profile.isPro ? profile.aiCredits : (profile.aiCredits || 0) - AI_COSTS.VIDEO_ANALYSIS
+          });
+        }
         
         setIsAnalyzing(false);
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setAnalysis("Error analyzing video. Please try again.");
+      setError(error.message || "Error analyzing video. Please try again.");
       setIsAnalyzing(false);
     }
   };
@@ -364,30 +398,36 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
         </div>
       </div>
 
-      <header className="sticky top-0 z-50 glass-dark px-4 md:px-8 py-4 md:py-6 flex items-center gap-4 md:gap-6 border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[2rem] md:rounded-b-[3.5rem]">
-        <motion.button 
-          whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => {
-            if (isRecording) stopRecording();
-            onBack();
-          }} 
-          className="p-2 md:p-3.5 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
-        >
-          <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-white/90" />
-        </motion.button>
-        <div>
-          <motion.h1 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+      <header className="sticky top-0 z-50 glass-dark px-4 md:px-8 py-4 md:py-6 flex items-center justify-between border-b border-white/10 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-b-[2rem] md:rounded-b-[3.5rem]">
+        <div className="flex items-center gap-4 md:gap-6">
+          <motion.button 
+            whileHover={{ scale: 1.1, x: -3, backgroundColor: 'rgba(255,255,255,0.15)' }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => {
+              if (isRecording) stopRecording();
+              onBack();
+            }} 
+            className="p-2 md:p-3.5 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all border border-white/10 shadow-2xl backdrop-blur-xl"
           >
-            Video Analysis
-          </motion.h1>
-          <div className="flex items-center gap-2 mt-1 md:mt-2">
-            <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
-            <p className="text-[8px] md:text-[10px] text-brand-teal font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70">AI BIOMECHANICS ENGINE</p>
+            <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-white/90" />
+          </motion.button>
+          <div>
+            <motion.h1 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter text-gradient leading-none drop-shadow-2xl"
+            >
+              Video Analysis
+            </motion.h1>
+            <div className="flex items-center gap-2 mt-1 md:mt-2">
+              <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-brand-teal shadow-[0_0_10px_rgba(0,245,160,0.8)] animate-pulse" />
+              <p className="text-[8px] md:text-[10px] text-brand-teal font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70">AI BIOMECHANICS ENGINE</p>
+            </div>
           </div>
+        </div>
+        <div className="flex items-center gap-1.5 bg-brand-teal/10 px-3 py-1.5 rounded-lg border border-brand-teal/30">
+          <Brain className="w-4 h-4 text-brand-teal" />
+          <span className="font-mono text-xs text-brand-teal font-bold">{profile.aiCredits ?? 100} V-Coins</span>
         </div>
       </header>
 
@@ -553,7 +593,8 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
                   className="w-full py-6 md:py-8 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-r from-brand-violet to-brand-blue font-black text-2xl md:text-3xl italic uppercase tracking-tighter flex items-center justify-center gap-4 md:gap-6 shadow-[0_15px_30px_rgba(0,0,0,0.5)] md:shadow-[0_30px_60px_rgba(0,0,0,0.5)] group relative overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 skew-x-12" />
-                  <Play className="w-8 h-8 md:w-10 md:h-10 fill-current group-hover:scale-125 transition-transform drop-shadow-lg" /> Analyze & Verify
+                  <Play className="w-8 h-8 md:w-10 md:h-10 fill-current group-hover:scale-125 transition-transform drop-shadow-lg" /> Analyze & Verify 
+                  <span className="text-sm md:text-base bg-black/20 px-3 py-1 rounded-full flex items-center gap-2 ml-2"><Brain className="w-4 h-4 md:w-5 md:h-5" /> {AI_COSTS.VIDEO_ANALYSIS}</span>
                 </motion.button>
               </div>
             )}
@@ -669,6 +710,8 @@ Use Google Search to look up YouTube videos of professional fighters to referenc
           </div>
         )}
       </main>
+
+
     </div>
   );
 }

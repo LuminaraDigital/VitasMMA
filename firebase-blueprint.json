@@ -54,6 +54,19 @@
       },
       "required": ["id", "title", "description", "durationWeeks", "currentDay", "tasks", "progress"]
     },
+    "KnowledgeDoc": {
+      "title": "KnowledgeDoc",
+      "description": "A document in the AI knowledge base for RAG",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "chunks": { "type": "array", "items": { "type": "object" } },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "chunks", "userId"]
+    },
     "UserProfile": {
       "title": "UserProfile",
       "description": "The user's fighter profile",
@@ -84,18 +97,23 @@
         "badges": { "type": "array", "items": { "type": "string" } },
         "isPro": { "type": "boolean" },
         "coins": { "type": "number" },
+        "aiCredits": { "type": "number" },
         "dailyQuests": { "type": "array", "items": { "type": "object" } },
         "unlockedModules": { "type": "array", "items": { "type": "string" } },
         "strengthLogs": { "type": "array", "items": { "$ref": "StrengthLog" } },
         "uid": { "type": "string" }
       },
-      "required": ["baseStyle", "stance", "striking", "grappling", "clinch", "archetype", "xp", "level", "streak", "activeDrills", "analysisHistory", "uid"]
+      "required": ["baseStyle", "stance", "striking", "grappling", "clinch", "archetype", "xp", "level", "streak", "activeDrills", "analysisHistory", "uid", "isPro", "coins", "aiCredits"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profiles"
+    },
+    "/knowledge_base/{docId}": {
+      "schema": "KnowledgeDoc",
+      "description": "AI knowledge base documents for RAG"
     }
   }
 }

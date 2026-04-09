@@ -4,6 +4,7 @@ import { ChevronRight, Activity, Crosshair, Scale, ArrowDown, Target, Zap, Dumbb
 import { UserProfile, Drill } from '../types';
 import { getWeightClassInfo } from '../utils/mma';
 import Logo from './Logo';
+import { INITIAL_USER_STATS, QUEST_REWARDS } from '../constants';
 
 const STYLES = ['Boxing', 'Muay Thai', 'Kickboxing', 'Wrestling', 'BJJ', 'Judo', 'Sambo', 'MMA Hybrid'];
 const STANCES = ['Orthodox', 'Southpaw', 'Switch'];
@@ -17,12 +18,12 @@ const DEFAULT_DRILLS: Drill[] = [
 ];
 
 const DEFAULT_QUESTS = [
-  { id: 'q1', desc: 'Complete your first Video Analysis', completed: false, reward: 100 },
-  { id: 'q2', desc: 'Train with the Live Voice Coach', completed: false, reward: 150 },
-  { id: 'q3', desc: 'Log in for 3 consecutive days', completed: false, reward: 300 },
+  { id: 'q1', desc: 'Complete your first Video Analysis', completed: false, reward: QUEST_REWARDS.VIDEO_ANALYSIS, progress: 0, target: 1 },
+  { id: 'q2', desc: 'Train with the Live Voice Coach', completed: false, reward: QUEST_REWARDS.LIVE_COACH, progress: 0, target: 1 },
+  { id: 'q3', desc: 'Log in for 3 consecutive days', completed: false, reward: QUEST_REWARDS.STREAK_3_DAY, progress: 1, target: 3 },
 ];
 
-export default function Onboarding({ user, onComplete }: { user?: any, onComplete: (p: UserProfile) => void }) {
+export default function Onboarding({ user, profile, onComplete }: { user?: any, profile?: UserProfile | null, onComplete: (p: UserProfile) => void }) {
   const [step, setStep] = useState(1);
   
   // Try to parse name from Google Auth or Telegram
@@ -104,6 +105,7 @@ export default function Onboarding({ user, onComplete }: { user?: any, onComplet
       striking,
       grappling,
       clinch,
+      aiCredits: profile?.aiCredits ?? INITIAL_USER_STATS.AI_CREDITS,
       archetype: trainingTrack === 'snc' ? 'S&C Athlete' : getArchetype(),
       trainingTrack: trainingTrack || 'mma',
       power,
@@ -112,13 +114,13 @@ export default function Onboarding({ user, onComplete }: { user?: any, onComplet
       recovery,
       sncArchetype: getSncArchetype(),
       prTracker: {},
-      xp: 100,
-      level: 1,
+      xp: INITIAL_USER_STATS.XP,
+      level: INITIAL_USER_STATS.LEVEL,
       streak: 1,
       activeDrills: DEFAULT_DRILLS,
       analysisHistory: [],
-      isPro: false,
-      coins: 500,
+      isPro: profile?.isPro ?? false,
+      coins: profile?.coins ?? INITIAL_USER_STATS.COINS,
       dailyQuests: DEFAULT_QUESTS
     });
   };
